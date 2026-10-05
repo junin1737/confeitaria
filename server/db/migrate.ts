@@ -273,7 +273,34 @@ const STATEMENTS = [
     unidade TEXT NOT NULL DEFAULT 'g'
   )`,
 
-  // 20. Índices de Otimização Fase 1
+  // 20. Fase 1: tb_tipo_item (Classificação de itens: Insumos, Embalagem, Acabado, Revenda, etc.)
+  `CREATE TABLE IF NOT EXISTS tb_tipo_item (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    nome TEXT NOT NULL,
+    codigo TEXT,
+    descricao TEXT,
+    padrao INTEGER NOT NULL DEFAULT 0,
+    criado_em TEXT NOT NULL,
+    UNIQUE (empresa_id, nome)
+  )`,
+
+  // 21. Fase 1: tb_produto_custo_historico (Evolução temporal e auditoria de custo do produto)
+  `CREATE TABLE IF NOT EXISTS tb_produto_custo_historico (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    produto_id INTEGER NOT NULL REFERENCES tb_produto(id) ON DELETE CASCADE,
+    data_hora TEXT NOT NULL,
+    custo_producao REAL NOT NULL,
+    custo_insumos REAL NOT NULL,
+    custo_mao_de_obra REAL NOT NULL,
+    custo_fixos REAL NOT NULL,
+    preco_venda REAL NOT NULL,
+    margem_lucro_real REAL NOT NULL,
+    motivo TEXT
+  )`,
+
+  // 22. Índices de Otimização Fase 1
   `CREATE INDEX IF NOT EXISTS idx_insumo_empresa ON tb_insumo (empresa_id)`,
   `CREATE INDEX IF NOT EXISTS idx_receita_empresa ON tb_receita (empresa_id)`,
   `CREATE INDEX IF NOT EXISTS idx_receita_item_receita ON tb_receita_item (receita_id)`,
@@ -282,6 +309,9 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_cliente_empresa ON tb_cliente (empresa_id)`,
   `CREATE INDEX IF NOT EXISTS idx_produto_empresa ON tb_produto (empresa_id)`,
   `CREATE INDEX IF NOT EXISTS idx_produto_insumo_produto ON tb_produto_insumo (produto_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_tipo_item_empresa ON tb_tipo_item (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_produto_custo_hist_prod ON tb_produto_custo_historico (produto_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_produto_custo_hist_data ON tb_produto_custo_historico (data_hora)`,
 ];
 
 /**
@@ -325,4 +355,7 @@ export async function migrate() {
 
   // Migrações incrementais na tabela de insumos (vínculo com fornecedor)
   await ensureColumn("tb_insumo", "fornecedor_id", "INTEGER REFERENCES tb_fornecedor(id)");
+
+  // Migrações incrementais na tabela de produtos (vínculo com tipo de item)
+  await ensureColumn("tb_produto", "tipo_item_id", "INTEGER REFERENCES tb_tipo_item(id)");
 }

@@ -73,6 +73,10 @@ import {
   salvarProduto,
   excluirProduto,
   proximoCodigoProduto,
+  listarTiposItem,
+  salvarTipoItem,
+  excluirTipoItem,
+  listarHistoricoCustoProduto,
 } from "./cadastros";
 import { migrate } from "./db/migrate";
 import { seed } from "./db/seed";
@@ -920,6 +924,57 @@ async function start() {
       res.json(result);
     } catch (e: any) {
       res.status(500).json({ erro: e?.message || "Erro ao excluir produto" });
+    }
+  });
+
+  // [FASE 1: HISTÓRICO DE EVOLUÇÃO DE CUSTO DO PRODUTO]
+  app.get("/api/produtos/:id/historico-custo", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const { de, ate } = req.query as { de?: string; ate?: string };
+      const historico = await listarHistoricoCustoProduto(
+        req.usuario!.empresaId,
+        Number(req.params.id),
+        de,
+        ate
+      );
+      res.json({ historico });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao consultar histórico de custo" });
+    }
+  });
+
+  // [FASE 1: TIPOS DE ITEM (Insumo, Embalagem, Acabado, Revenda, Semi-acabado)]
+  app.get("/api/tipos-item", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      res.json({ tiposItem: await listarTiposItem(req.usuario!.empresaId) });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar tipos de item" });
+    }
+  });
+
+  app.post("/api/tipos-item", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await salvarTipoItem(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json({ tipoItem: result });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar tipo de item" });
+    }
+  });
+
+  app.delete("/api/tipos-item/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await excluirTipoItem(req.usuario!.empresaId, Number(req.params.id));
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao excluir tipo de item" });
     }
   });
 

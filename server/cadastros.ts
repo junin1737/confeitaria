@@ -180,6 +180,83 @@ export async function excluirSubgrupo(empresaId: number, id: number) {
 
 /**
  * ============================================================================
+ * [MÓDULO: TIPOS DE ITEM]
+ * (Insumo, Embalagem, Produto Acabado, Mercadoria p/ Revenda, Semi-acabado)
+ * ============================================================================
+ */
+
+export type TipoItem = {
+  id: number;
+  nome: string;
+  codigo: string | null;
+  descricao: string | null;
+  padrao: boolean;
+  totalProdutos?: number;
+};
+
+export async function listarTiposItem(empresaId: number): Promise<TipoItem[]> {
+  const result = await db.execute({
+    sql: `SELECT t.id, t.nome, t.codigo, t.descricao, t.padrao,
+                 (SELECT COUNT(*) FROM tb_produto p WHERE p.tipo_item_id = t.id) AS total_produtos
+          FROM tb_tipo_item t
+          WHERE t.empresa_id = ?
+          ORDER BY t.padrao DESC, t.nome ASC`,
+    args: [empresaId],
+  });
+
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    nome: String(row.nome),
+    codigo: row.codigo ? String(row.codigo) : null,
+    descricao: row.descricao ? String(row.descricao) : null,
+    padrao: Boolean(row.padrao),
+    totalProdutos: Number(row.total_produtos ?? 0),
+  }));
+}
+
+export async function salvarTipoItem(
+  empresaId: number,
+  dados: { id?: number; nome: string; codigo?: string; descricao?: string; padrao?: boolean }
+) {
+  const nome = dados.nome.trim();
+  if (!nome) return { erro: "Informe o nome do tipo de item." };
+
+  if (dados.id) {
+    await db.execute({
+      sql: `UPDATE tb_tipo_item SET nome = ?, codigo = ?, descricao = ?, padrao = ?
+            WHERE empresa_id = ? AND id = ?`,
+      args: [nome, dados.codigo?.trim() || null, dados.descricao?.trim() || null, dados.padrao ? 1 : 0, empresaId, dados.id],
+    });
+    return { id: dados.id, nome, codigo: dados.codigo || null, descricao: dados.descricao || null, padrao: Boolean(dados.padrao) };
+  }
+
+  const created = await db.execute({
+    sql: `INSERT INTO tb_tipo_item (empresa_id, nome, codigo, descricao, padrao, criado_em)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [empresaId, nome, dados.codigo?.trim() || null, dados.descricao?.trim() || null, dados.padrao ? 1 : 0, NOW()],
+  });
+
+  return { id: Number(created.lastInsertRowid), nome, codigo: dados.codigo || null, descricao: dados.descricao || null, padrao: Boolean(dados.padrao) };
+}
+
+export async function excluirTipoItem(empresaId: number, id: number) {
+  const vinculados = await db.execute({
+    sql: "SELECT COUNT(*) AS total FROM tb_produto WHERE empresa_id = ? AND tipo_item_id = ?",
+    args: [empresaId, id],
+  });
+  if (Number(vinculados.rows[0]?.total ?? 0) > 0) {
+    return { erro: "Não é possível excluir este tipo de item pois existem produtos vinculados a ele." };
+  }
+
+  await db.execute({
+    sql: "DELETE FROM tb_tipo_item WHERE empresa_id = ? AND id = ?",
+    args: [empresaId, id],
+  });
+  return { ok: true };
+}
+
+/**
+ * ============================================================================
  * [MÓDULO: FORNECEDORES]
  * ============================================================================
  */
@@ -554,17 +631,33 @@ export type ProdutoItemReceita = {
   custoTotalItem: number;
 };
 
+export type ProdutoCustoHistorico = {
+  id: number;
+  produtoId: number;
+  dataHora: string;
+  custoProducao: number;
+  custoInsumos: number;
+  custoMaoDeObra: number;
+  custoFixos: number;
+  precoVenda: number;
+  margemLucroReal: number;
+  motivo?: string | null;
+};
+
 export type Produto = {
   id: number;
   codigo: string;
   nome: string;
   descricao: string | null;
+  tipoItemId: number | null;
+  tipoItemNome?: string | null;
   grupoId: number | null;
   grupoNome?: string | null;
   subgrupoId: number | null;
   subgrupoNome?: string | null;
   unidadeVenda: string;
   precoCusto: number;
+  custoMedio: number;
   precoVenda: number;
   margemLucroRealPercent: number;
   estoqueAtual: number;
@@ -611,10 +704,11 @@ export async function proximoCodigoProduto(empresaId: number): Promise<string> {
 
 export async function listarProdutos(empresaId: number): Promise<Produto[]> {
   const result = await db.execute({
-    sql: `SELECT p.*, g.nome AS grupo_nome, s.nome AS subgrupo_nome
+    sql: `SELECT p.*, g.nome AS grupo_nome, s.nome AS subgrupo_nome, t.nome AS tipo_item_nome
           FROM tb_produto p
           LEFT JOIN tb_grupo_produto g ON g.id = p.grupo_id
           LEFT JOIN tb_subgrupo_produto s ON s.id = p.subgrupo_id
+          LEFT JOIN tb_tipo_item t ON t.id = p.tipo_item_id
           WHERE p.empresa_id = ?
           ORDER BY p.nome ASC`,
     args: [empresaId],
@@ -664,17 +758,30 @@ export async function listarProdutos(empresaId: number): Promise<Produto[]> {
       precoVenda
     );
 
+    // Custo médio histórico dos últimos 12 meses
+    const mediaResult = await db.execute({
+      sql: `SELECT AVG(custo_producao) AS media_custo
+            FROM tb_produto_custo_historico
+            WHERE produto_id = ? AND data_hora >= datetime('now', '-12 months')`,
+      args: [produtoId],
+    });
+    const mediaVal = Number(mediaResult.rows[0]?.media_custo ?? 0);
+    const custoMedio = mediaVal > 0 ? Math.round(mediaVal * 100) / 100 : metricas.custoPorUnidade;
+
     produtos.push({
       id: produtoId,
       codigo: String(row.codigo),
       nome: String(row.nome),
       descricao: row.descricao ? String(row.descricao) : null,
+      tipoItemId: row.tipo_item_id ? Number(row.tipo_item_id) : null,
+      tipoItemNome: row.tipo_item_nome ? String(row.tipo_item_nome) : null,
       grupoId: row.grupo_id ? Number(row.grupo_id) : null,
       grupoNome: row.grupo_nome ? String(row.grupo_nome) : null,
       subgrupoId: row.subgrupo_id ? Number(row.subgrupo_id) : null,
       subgrupoNome: row.subgrupo_nome ? String(row.subgrupo_nome) : null,
       unidadeVenda: String(row.unidade_venda ?? "unidade"),
       precoCusto: metricas.custoPorUnidade,
+      custoMedio,
       precoVenda: precoVenda || metricas.precoSugeridoPorUnidade,
       margemLucroRealPercent: metricas.margemRealPercentual,
       estoqueAtual: Number(row.estoque_atual ?? 0),
@@ -720,6 +827,7 @@ export async function salvarProduto(
     codigo?: string;
     nome: string;
     descricao?: string;
+    tipoItemId?: number | null;
     grupoId?: number | null;
     subgrupoId?: number | null;
     unidadeVenda?: string;
@@ -762,7 +870,7 @@ export async function salvarProduto(
   if (produtoId) {
     await db.execute({
       sql: `UPDATE tb_produto SET
-              codigo = ?, nome = ?, descricao = ?, grupo_id = ?, subgrupo_id = ?,
+              codigo = ?, nome = ?, descricao = ?, tipo_item_id = ?, grupo_id = ?, subgrupo_id = ?,
               unidade_venda = ?, preco_venda = ?, estoque_atual = ?, estoque_minimo = ?,
               tem_receita = ?, rendimento_quantidade = ?, rendimento_unidade = ?,
               tempo_preparo_minutos = ?, custo_hora_trabalho = ?, percentual_custos_fixos = ?,
@@ -773,6 +881,7 @@ export async function salvarProduto(
         codigo,
         nome,
         dados.descricao?.trim() || null,
+        dados.tipoItemId || null,
         dados.grupoId || null,
         dados.subgrupoId || null,
         dados.unidadeVenda || "unidade",
@@ -803,18 +912,19 @@ export async function salvarProduto(
   } else {
     const created = await db.execute({
       sql: `INSERT INTO tb_produto (
-              empresa_id, codigo, nome, descricao, grupo_id, subgrupo_id,
+              empresa_id, codigo, nome, descricao, tipo_item_id, grupo_id, subgrupo_id,
               unidade_venda, preco_custo, preco_venda, estoque_atual, estoque_minimo,
               tem_receita, rendimento_quantidade, rendimento_unidade,
               tempo_preparo_minutos, custo_hora_trabalho, percentual_custos_fixos,
               margem_lucro_desejada, preco_sugerido, modo_preparo, status,
               foto_url, criado_em, atualizado_em
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
       args: [
         empresaId,
         codigo,
         nome,
         dados.descricao?.trim() || null,
+        dados.tipoItemId || null,
         dados.grupoId || null,
         dados.subgrupoId || null,
         dados.unidadeVenda || "unidade",
@@ -851,7 +961,67 @@ export async function salvarProduto(
     }
   }
 
-  return obterProduto(empresaId, produtoId);
+  // Recarrega o produto com as métricas recalculadas
+  const produtoAtualizado = await obterProduto(empresaId, produtoId);
+  if (produtoAtualizado) {
+    // Registra entrada de auditoria na evolução de custos
+    await db.execute({
+      sql: `INSERT INTO tb_produto_custo_historico (
+              empresa_id, produto_id, data_hora, custo_producao, custo_insumos,
+              custo_mao_de_obra, custo_fixos, preco_venda, margem_lucro_real, motivo
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        empresaId,
+        produtoId,
+        agora,
+        produtoAtualizado.precoCusto,
+        produtoAtualizado.custoInsumos,
+        produtoAtualizado.custoMaoDeObra,
+        produtoAtualizado.custoFixos,
+        produtoAtualizado.precoVenda,
+        produtoAtualizado.margemLucroRealPercent,
+        dados.id ? "Atualização de ficha técnica / cadastro" : "Cadastro inicial do produto",
+      ],
+    });
+  }
+
+  return produtoAtualizado;
+}
+
+/**
+ * [HISTÓRICO: listarHistoricoCustoProduto]
+ * Busca o histórico de evolução do custo de um produto por intervalo de datas (padrão: últimos 12 meses).
+ */
+export async function listarHistoricoCustoProduto(
+  empresaId: number,
+  produtoId: number,
+  dataInicio?: string,
+  dataFim?: string
+): Promise<ProdutoCustoHistorico[]> {
+  const de = dataInicio || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+  const ate = dataFim || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+  const result = await db.execute({
+    sql: `SELECT id, produto_id, data_hora, custo_producao, custo_insumos,
+                 custo_mao_de_obra, custo_fixos, preco_venda, margem_lucro_real, motivo
+          FROM tb_produto_custo_historico
+          WHERE empresa_id = ? AND produto_id = ? AND data_hora >= ? AND data_hora <= ?
+          ORDER BY data_hora DESC`,
+    args: [empresaId, produtoId, de, ate],
+  });
+
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    produtoId: Number(row.produto_id),
+    dataHora: String(row.data_hora),
+    custoProducao: Number(row.custo_producao ?? 0),
+    custoInsumos: Number(row.custo_insumos ?? 0),
+    custoMaoDeObra: Number(row.custo_mao_de_obra ?? 0),
+    custoFixos: Number(row.custo_fixos ?? 0),
+    precoVenda: Number(row.preco_venda ?? 0),
+    margemLucroReal: Number(row.margem_lucro_real ?? 0),
+    motivo: row.motivo ? String(row.motivo) : null,
+  }));
 }
 
 export async function excluirProduto(empresaId: number, id: number) {

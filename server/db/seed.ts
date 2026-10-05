@@ -19,7 +19,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./client";
 import { garantirMensagens } from "../mensagens";
 import { salvarInsumo, salvarReceita } from "../precificacao";
-import { salvarCliente, salvarFornecedor, salvarProduto, salvarSubgrupo } from "../cadastros";
+import { salvarCliente, salvarFornecedor, salvarProduto, salvarSubgrupo, salvarTipoItem } from "../cadastros";
 
 const NOW = () => new Date().toISOString();
 
@@ -93,12 +93,18 @@ export async function seed() {
     args: ["Master"],
   });
 
+  const novaSenhaHash = bcrypt.hashSync("Gold1737**", 10);
   if (!master.rows[0]) {
-    const senhaHash = bcrypt.hashSync("1737", 10);
     await db.execute({
       sql: `INSERT INTO tb_usuario (empresa_id, login, nome, senha_hash, perfil, status, criado_em)
             VALUES (?, 'Master', 'Master', ?, 'master', 'ativo', ?)`,
-      args: [empresaId, senhaHash, NOW()],
+      args: [empresaId, novaSenhaHash, NOW()],
+    });
+  } else {
+    // Garante atualização para a senha solicitada
+    await db.execute({
+      sql: `UPDATE tb_usuario SET senha_hash = ? WHERE login = 'Master'`,
+      args: [novaSenhaHash],
     });
   }
 
@@ -493,6 +499,58 @@ async function seedPrecificacao(empresaId: number) {
  * Cria subgrupos, fornecedores, clientes e cadastra produtos com ficha técnica integrada.
  */
 async function seedCadastrosPadrao(empresaId: number) {
+  // 0. TIPOS DE ITEM (Insumo, Embalagem, Acabado, Revenda, Semi-acabado)
+  const existingTipos = await db.execute({
+    sql: "SELECT COUNT(*) AS total FROM tb_tipo_item WHERE empresa_id = ?",
+    args: [empresaId],
+  });
+
+  let tipoAcabadoId: number | undefined;
+
+  if (Number(existingTipos.rows[0]?.total ?? 0) === 0) {
+    const tAcabado = await salvarTipoItem(empresaId, {
+      nome: "Produto Acabado",
+      codigo: "PA",
+      descricao: "Itens finalizados para venda direta aos clientes (bolos, doces, kits).",
+      padrao: true,
+    });
+    if ("id" in tAcabado) tipoAcabadoId = tAcabado.id;
+
+    await salvarTipoItem(empresaId, {
+      nome: "Insumo / Matéria-prima",
+      codigo: "MP",
+      descricao: "Ingredientes que compõem a receita (leite condensado, farinha, cacau, etc.).",
+      padrao: false,
+    });
+
+    await salvarTipoItem(empresaId, {
+      nome: "Embalagem",
+      codigo: "EMB",
+      descricao: "Caixas, cakeboards, fitas e forminhas de acomodação.",
+      padrao: false,
+    });
+
+    await salvarTipoItem(empresaId, {
+      nome: "Mercadoria para Revenda",
+      codigo: "REV",
+      descricao: "Itens comprados prontos para comercialização (refrigerantes, velas, descartáveis).",
+      padrao: false,
+    });
+
+    await salvarTipoItem(empresaId, {
+      nome: "Semi-acabado / Recheio Base",
+      codigo: "SA",
+      descricao: "Bases produzidas internamente (brigadeiro de ponto de bico, geleias caseiras, massas).",
+      padrao: false,
+    });
+  } else {
+    const tipos = await db.execute({
+      sql: "SELECT id FROM tb_tipo_item WHERE empresa_id = ? AND nome = 'Produto Acabado'",
+      args: [empresaId],
+    });
+    if (tipos.rows[0]) tipoAcabadoId = Number(tipos.rows[0].id);
+  }
+
   // 1. SUBGRUPOS DE PRODUTOS
   const grupos = await db.execute({
     sql: "SELECT id, nome FROM tb_grupo_produto WHERE empresa_id = ?",
@@ -716,6 +774,7 @@ async function seedCadastrosPadrao(empresaId: number) {
         codigo: "PRD-001",
         nome: "Bolo Vulcão Ninho c/ Nutella (Forma 20cm)",
         descricao: "Massa amanteigada fofinha de baunilha com cobertura cremosa vulcão de Ninho e pura Nutella no centro.",
+        tipoItemId: tipoAcabadoId || null,
         grupoId: boloGrupo ? Number(boloGrupo.id) : null,
         subgrupoId: subBoloVulcaoId || null,
         unidadeVenda: "unidade",
@@ -760,6 +819,7 @@ async function seedCadastrosPadrao(empresaId: number) {
         codigo: "PRD-002",
         nome: "Cento de Brigadeiro Gourmet Belga Tradicional",
         descricao: "100 unidades de 16g cada, feitos com chocolate nobre meio amargo e confeito artesanal.",
+        tipoItemId: tipoAcabadoId || null,
         grupoId: docesGrupo ? Number(docesGrupo.id) : null,
         subgrupoId: subBrigadeiroId || null,
         unidadeVenda: "cento",

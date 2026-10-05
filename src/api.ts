@@ -847,17 +847,42 @@ export type ProdutoItemReceita = {
   custoTotalItem: number;
 };
 
+export type TipoItem = {
+  id: number;
+  nome: string;
+  codigo: string | null;
+  descricao: string | null;
+  padrao: boolean;
+  totalProdutos?: number;
+};
+
+export type ProdutoCustoHistorico = {
+  id: number;
+  produtoId: number;
+  dataHora: string;
+  custoProducao: number;
+  custoInsumos: number;
+  custoMaoDeObra: number;
+  custoFixos: number;
+  precoVenda: number;
+  margemLucroReal: number;
+  motivo?: string | null;
+};
+
 export type Produto = {
   id: number;
   codigo: string;
   nome: string;
   descricao: string | null;
+  tipoItemId: number | null;
+  tipoItemNome?: string | null;
   grupoId: number | null;
   grupoNome?: string | null;
   subgrupoId: number | null;
   subgrupoNome?: string | null;
   unidadeVenda: string;
   precoCusto: number;
+  custoMedio: number;
   precoVenda: number;
   margemLucroRealPercent: number;
   estoqueAtual: number;
@@ -894,6 +919,7 @@ export type ProdutoInput = {
   codigo?: string;
   nome: string;
   descricao?: string;
+  tipoItemId?: number | null;
   grupoId?: number | null;
   subgrupoId?: number | null;
   unidadeVenda?: string;
@@ -946,6 +972,54 @@ export async function deleteProduto(id: number): Promise<void> {
   const res = await fetch(`/api/produtos/${id}`, { method: "DELETE", credentials: "include" });
   const data = await readJson<{ ok?: boolean; erro?: string }>(res);
   if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao excluir produto");
+}
+
+export async function fetchHistoricoCustoProduto(
+  produtoId: number,
+  de?: string,
+  ate?: string
+): Promise<ProdutoCustoHistorico[]> {
+  const params = new URLSearchParams();
+  if (de) params.append("de", de);
+  if (ate) params.append("ate", ate);
+  const queryStr = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`/api/produtos/${produtoId}/historico-custo${queryStr}`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Erro ao carregar histórico de custo");
+  const data = await readJson<{ historico: ProdutoCustoHistorico[] }>(res);
+  return data.historico;
+}
+
+export async function fetchTiposItem(): Promise<TipoItem[]> {
+  const res = await fetch("/api/tipos-item", { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar tipos de item");
+  const data = await readJson<{ tiposItem: TipoItem[] }>(res);
+  return data.tiposItem;
+}
+
+export async function saveTipoItem(dados: {
+  id?: number;
+  nome: string;
+  codigo?: string;
+  descricao?: string;
+  padrao?: boolean;
+}): Promise<TipoItem> {
+  const res = await fetch("/api/tipos-item", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ tipoItem?: TipoItem; erro?: string }>(res);
+  if (!res.ok || !data.tipoItem) throw new Error(data.erro || "Erro ao salvar tipo de item");
+  return data.tipoItem;
+}
+
+export async function deleteTipoItem(id: number): Promise<void> {
+  const res = await fetch(`/api/tipos-item/${id}`, { method: "DELETE", credentials: "include" });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao excluir tipo de item");
 }
 
 

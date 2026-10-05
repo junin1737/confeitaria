@@ -17,33 +17,44 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
   Cake,
+  Calendar,
   Check,
   ChefHat,
   Download,
   FolderPlus,
+  History,
+  Layers,
   Plus,
   Search,
   Tag,
   Trash2,
+  TrendingDown,
+  TrendingUp,
   X,
 } from "lucide-react";
 import {
   deleteProduto,
   fetchGrupos,
+  fetchHistoricoCustoProduto,
   fetchInsumos,
   fetchProdutos,
   fetchProximoCodigoProduto,
   fetchSubgrupos,
+  fetchTiposItem,
   saveGrupo,
   saveProduto,
   saveSubgrupo,
+  saveTipoItem,
   deleteGrupo,
   deleteSubgrupo,
+  deleteTipoItem,
   type GrupoProduto,
   type Insumo,
   type Produto,
+  type ProdutoCustoHistorico,
   type ProdutoInput,
   type SubgrupoProduto,
+  type TipoItem,
 } from "../api";
 
 export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) {
@@ -51,21 +62,24 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
   const [grupos, setGrupos] = useState<GrupoProduto[]>([]);
   const [subgrupos, setSubgrupos] = useState<SubgrupoProduto[]>([]);
   const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [tiposItem, setTiposItem] = useState<TipoItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filtros e Seleção
   const [query, setQuery] = useState("");
   const [filtroGrupo, setFiltroGrupo] = useState<number | "todos">("todos");
+  const [filtroTipoItem, setFiltroTipoItem] = useState<number | "todos">("todos");
   const [selectedId, setSelectedId] = useState<number | "new" | null>(null);
 
-  // Abas do formulário do produto: "dados" ou "receita"
-  const [formTab, setFormTab] = useState<"dados" | "receita">("dados");
+  // Abas do formulário do produto: "dados", "receita", "historico"
+  const [formTab, setFormTab] = useState<"dados" | "receita" | "historico">("dados");
 
   // Estado do Formulário do Produto
   const [proximoCod, setProximoCod] = useState("");
   const [formCodigo, setFormCodigo] = useState("");
   const [formNome, setFormNome] = useState("");
   const [formDescricao, setFormDescricao] = useState("");
+  const [formTipoItemId, setFormTipoItemId] = useState<number | null>(null);
   const [formGrupoId, setFormGrupoId] = useState<number | null>(null);
   const [formSubgrupoId, setFormSubgrupoId] = useState<number | null>(null);
   const [formUnidadeVenda, setFormUnidadeVenda] = useState("unidade");
@@ -87,32 +101,49 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     { insumoId: number; quantidade: number; unidade: string }[]
   >([]);
 
+  // Histórico de Evolução de Custo
+  const [historicoCusto, setHistoricoCusto] = useState<ProdutoCustoHistorico[]>([]);
+  const [historicoCarregando, setHistoricoCarregando] = useState(false);
+  const [dataInicioHist, setDataInicioHist] = useState(
+    new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+  );
+  const [dataFimHist, setDataFimHist] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
-  // Modal de Gestão de Grupos & Subgrupos
+  // Modais de Gestão (Grupos e Tipos de Item)
   const [modalGruposAberto, setModalGruposAberto] = useState(false);
   const [novoGrupoNome, setNovoGrupoNome] = useState("");
   const [novoGrupoCor, setNovoGrupoCor] = useState("#c96852");
   const [novoSubgrupoNome, setNovoSubgrupoNome] = useState("");
   const [novoSubgrupoPaiId, setNovoSubgrupoPaiId] = useState<number | null>(null);
 
+  const [modalTiposAberto, setModalTiposAberto] = useState(false);
+  const [novoTipoNome, setNovoTipoNome] = useState("");
+  const [novoTipoCodigo, setNovoTipoCodigo] = useState("");
+  const [novoTipoDescricao, setNovoTipoDescricao] = useState("");
+
   // Carregar dados
   const carregarDados = async () => {
     setLoading(true);
     try {
-      const [prods, grps, subgrps, ins, prox] = await Promise.all([
+      const [prods, grps, subgrps, ins, prox, tipos] = await Promise.all([
         fetchProdutos(),
         fetchGrupos(),
         fetchSubgrupos(),
         fetchInsumos(),
         fetchProximoCodigoProduto(),
+        fetchTiposItem(),
       ]);
       setProdutos(prods);
       setGrupos(grps);
       setSubgrupos(subgrps);
       setInsumos(ins);
       setProximoCod(prox);
+      setTiposItem(tipos);
 
       if (prods.length > 0 && selectedId === null) {
         selecionarProduto(prods[0]);
@@ -128,11 +159,24 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     carregarDados();
   }, []);
 
+  const carregarHistorico = async (prodId: number, de?: string, ate?: string) => {
+    setHistoricoCarregando(true);
+    try {
+      const hist = await fetchHistoricoCustoProduto(prodId, de || dataInicioHist, ate || dataFimHist);
+      setHistoricoCusto(hist);
+    } catch (err: any) {
+      console.error("Erro ao carregar histórico:", err);
+    } finally {
+      setHistoricoCarregando(false);
+    }
+  };
+
   const selecionarProduto = (p: Produto) => {
     setSelectedId(p.id);
     setFormCodigo(p.codigo);
     setFormNome(p.nome);
     setFormDescricao(p.descricao || "");
+    setFormTipoItemId(p.tipoItemId ?? tiposItem.find((t) => t.padrao)?.id ?? null);
     setFormGrupoId(p.grupoId);
     setFormSubgrupoId(p.subgrupoId);
     setFormUnidadeVenda(p.unidadeVenda || "unidade");
@@ -158,6 +202,9 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
       })) || []
     );
     setFormError("");
+
+    // Carrega histórico de evolução de custos
+    carregarHistorico(p.id);
   };
 
   const iniciarNovoProduto = () => {
@@ -165,6 +212,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     setFormCodigo(proximoCod);
     setFormNome("");
     setFormDescricao("");
+    setFormTipoItemId(tiposItem.find((t) => t.padrao)?.id || tiposItem[0]?.id || null);
     setFormGrupoId(grupos[0]?.id || null);
     setFormSubgrupoId(null);
     setFormUnidadeVenda("unidade");
@@ -183,6 +231,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     setFormMargemLucroDesejada(100);
     setFormModoPreparo("");
     setFormItensReceita([]);
+    setHistoricoCusto([]);
     setFormTab("dados");
     setFormError("");
   };
@@ -258,6 +307,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
         codigo: formCodigo,
         nome: formNome,
         descricao: formDescricao,
+        tipoItemId: formTipoItemId,
         grupoId: formGrupoId,
         subgrupoId: formSubgrupoId,
         unidadeVenda: formUnidadeVenda,
@@ -334,7 +384,8 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
       p.nome.toLowerCase().includes(query.toLowerCase()) ||
       p.codigo.toLowerCase().includes(query.toLowerCase());
     const bateGrupo = filtroGrupo === "todos" || p.grupoId === filtroGrupo;
-    return bateTexto && bateGrupo;
+    const bateTipo = filtroTipoItem === "todos" || p.tipoItemId === filtroTipoItem;
+    return bateTexto && bateGrupo && bateTipo;
   });
 
   const subgruposDisponiveis = subgrupos.filter((s) => s.grupoId === formGrupoId);
@@ -351,10 +402,13 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
             Produtos e Receitas <span className="heading-count">{produtos.length}</span>
           </h1>
           <p>
-            Produtos vendáveis com Ficha Técnica e Engenharia de Custos integrada no mesmo cadastro.
+            Produtos vendáveis com Ficha Técnica, Custo Médio e Engenharia de Custos integrada.
           </p>
         </div>
         <div className="heading-actions">
+          <button className="button secondary" onClick={() => setModalTiposAberto(true)}>
+            <Layers size={16} /> Tipos de Item
+          </button>
           <button className="button secondary" onClick={() => setModalGruposAberto(true)}>
             <FolderPlus size={16} /> Grupos & Subgrupos
           </button>
@@ -402,6 +456,22 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
+          </div>
+
+          <div style={{ display: "flex", gap: "6px", alignItems: "center", padding: "0 16px 12px", borderBottom: "1px solid var(--c-border)" }}>
+            <span style={{ fontSize: "11px", color: "var(--c-muted)", fontWeight: 600 }}>Tipo:</span>
+            <select
+              value={filtroTipoItem}
+              onChange={(e) => setFiltroTipoItem(e.target.value === "todos" ? "todos" : Number(e.target.value))}
+              style={{ fontSize: "11px", padding: "3px 8px", border: "1px solid var(--c-border)", borderRadius: "6px", flex: 1 }}
+            >
+              <option value="todos">Todos os tipos de item</option>
+              {tiposItem.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nome}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="employee-list">
@@ -514,7 +584,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
               )}
 
               {/* Métricas Principais (.detail-stat-grid) */}
-              <div className="detail-stat-grid">
+              <div className="detail-stat-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
                 <div>
                   <span>Preço de Venda</span>
                   <strong style={{ color: "var(--c-primary)" }}>
@@ -523,9 +593,16 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                   <small>Por {formUnidadeVenda}</small>
                 </div>
                 <div>
-                  <span>Custo de Produção</span>
+                  <span>Custo Atual</span>
                   <strong>R$ {custoPorUnidadeForm.toFixed(2)}</strong>
                   <small>Insumos + Mão de Obra + Fixos</small>
+                </div>
+                <div>
+                  <span>Custo Médio (12m)</span>
+                  <strong style={{ color: "#4f7c9b" }}>
+                    R$ {(selectedId !== "new" && selectedId != null ? produtos.find((p) => p.id === selectedId)?.custoMedio ?? custoPorUnidadeForm : custoPorUnidadeForm).toFixed(2)}
+                  </strong>
+                  <small>Média dos últimos 12 meses</small>
                 </div>
                 <div>
                   <span>Margem Líquida Real</span>
@@ -536,7 +613,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                 </div>
               </div>
 
-              {/* Abas Nativas: "Dados Gerais" e "Ficha Técnica / Receita" */}
+              {/* Abas Nativas: "Dados Gerais", "Ficha Técnica / Receita" e "Evolução do Custo" */}
               <div className="tabs">
                 <button
                   type="button"
@@ -554,6 +631,19 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                   <ChefHat size={13} style={{ display: "inline", marginRight: "4px" }} />
                   Ficha Técnica & Receita ({formItensReceita.length} insumos)
                 </button>
+                <button
+                  type="button"
+                  className={formTab === "historico" ? "active" : ""}
+                  onClick={() => {
+                    setFormTab("historico");
+                    if (selectedId && selectedId !== "new") {
+                      carregarHistorico(selectedId);
+                    }
+                  }}
+                >
+                  <History size={13} style={{ display: "inline", marginRight: "4px" }} />
+                  Evolução do Custo ({historicoCusto.length} registros)
+                </button>
               </div>
 
               {/* CONTEÚDO DA ABA 1: DADOS GERAIS */}
@@ -568,24 +658,54 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                       </div>
                     </div>
                     <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-                      <div className="field">
-                        <label>Código Interno</label>
-                        <input
-                          value={formCodigo}
-                          onChange={(e) => setFormCodigo(e.target.value)}
-                          placeholder="PRD-001"
-                          required
-                        />
+                      <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: "10px" }}>
+                        <div className="field">
+                          <label>Código Interno</label>
+                          <input
+                            value={formCodigo}
+                            onChange={(e) => setFormCodigo(e.target.value)}
+                            placeholder="PRD-001"
+                            required
+                          />
+                        </div>
+                        <div className="field">
+                          <label>Nome do Produto *</label>
+                          <input
+                            value={formNome}
+                            onChange={(e) => setFormNome(e.target.value)}
+                            placeholder="Ex: Bolo Vulcão Ninho c/ Nutella"
+                            required
+                          />
+                        </div>
                       </div>
+
                       <div className="field">
-                        <label>Nome do Produto *</label>
-                        <input
-                          value={formNome}
-                          onChange={(e) => setFormNome(e.target.value)}
-                          placeholder="Ex: Bolo Vulcão Ninho c/ Nutella"
-                          required
-                        />
+                        <label>Tipo de Item (Classificação) *</label>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <select
+                            value={formTipoItemId || ""}
+                            onChange={(e) => setFormTipoItemId(Number(e.target.value) || null)}
+                            style={{ flex: 1 }}
+                            required
+                          >
+                            <option value="">Selecione o tipo de item...</option>
+                            {tiposItem.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.nome} {t.codigo ? `(${t.codigo})` : ""}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            className="button secondary"
+                            onClick={() => setModalTiposAberto(true)}
+                            title="Cadastrar / Gerenciar Tipos de Item"
+                          >
+                            <Plus size={14} /> Novo Tipo
+                          </button>
+                        </div>
                       </div>
+
                       <div className="field">
                         <label>Descrição Comercial</label>
                         <textarea
@@ -922,6 +1042,135 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                   </div>
                 </div>
               )}
+
+              {/* CONTEÚDO DA ABA 3: EVOLUÇÃO DE CUSTO & AUDITORIA */}
+              {formTab === "historico" && (
+                <div style={{ marginTop: "20px" }} className="detail-sections">
+                  <div className="subpanel">
+                    <div className="subpanel-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                      <div>
+                        <div className="section-kicker">Histórico & Auditoria</div>
+                        <h3>Evolução do Custo de Produção</h3>
+                      </div>
+
+                      {/* Filtro por Intervalo de Datas (Padrão: Últimos 12 meses) */}
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#fdf8f5", padding: "6px 12px", borderRadius: "8px", border: "1px solid var(--c-border)" }}>
+                        <Calendar size={14} style={{ color: "var(--c-primary)" }} />
+                        <span style={{ fontSize: "11px", fontWeight: 600 }}>De:</span>
+                        <input
+                          type="date"
+                          value={dataInicioHist}
+                          onChange={(e) => {
+                            const novaData = e.target.value;
+                            setDataInicioHist(novaData);
+                            if (selectedId && selectedId !== "new") {
+                              carregarHistorico(selectedId, novaData, dataFimHist);
+                            }
+                          }}
+                          style={{ fontSize: "11px", padding: "3px 6px", border: "1px solid var(--c-border)", borderRadius: "4px" }}
+                        />
+                        <span style={{ fontSize: "11px", fontWeight: 600 }}>Até:</span>
+                        <input
+                          type="date"
+                          value={dataFimHist}
+                          onChange={(e) => {
+                            const novaData = e.target.value;
+                            setDataFimHist(novaData);
+                            if (selectedId && selectedId !== "new") {
+                              carregarHistorico(selectedId, dataInicioHist, novaData);
+                            }
+                          }}
+                          style={{ fontSize: "11px", padding: "3px 6px", border: "1px solid var(--c-border)", borderRadius: "4px" }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: "16px" }}>
+                      {historicoCarregando ? (
+                        <div style={{ padding: "30px", textAlign: "center", color: "var(--c-muted)", fontSize: "12px" }}>
+                          Carregando histórico de custos...
+                        </div>
+                      ) : historicoCusto.length === 0 ? (
+                        <div style={{ padding: "36px 20px", textAlign: "center", background: "#fcfaf8", borderRadius: "8px", border: "1px dashed var(--c-border)" }}>
+                          <History size={28} style={{ color: "#d0c7c1", margin: "0 auto 8px" }} />
+                          <strong style={{ fontSize: "13px", display: "block" }}>Nenhum registro histórico no período</strong>
+                          <p style={{ fontSize: "11px", color: "var(--c-muted)", margin: "4px 0 0" }}>
+                            O histórico é registrado automaticamente a cada alteração ou recálculo de insumos do produto.
+                          </p>
+                        </div>
+                      ) : (
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                            <thead>
+                              <tr style={{ background: "#f9f5f1", borderBottom: "1px solid var(--c-border)", textAlign: "left" }}>
+                                <th style={{ padding: "10px 12px", fontWeight: 600 }}>Data / Hora</th>
+                                <th style={{ padding: "10px 12px", fontWeight: 600 }}>Custo Total</th>
+                                <th style={{ padding: "10px 12px", fontWeight: 600 }}>Insumos</th>
+                                <th style={{ padding: "10px 12px", fontWeight: 600 }}>Mão de Obra</th>
+                                <th style={{ padding: "10px 12px", fontWeight: 600 }}>Preço de Venda</th>
+                                <th style={{ padding: "10px 12px", fontWeight: 600 }}>Margem Real</th>
+                                <th style={{ padding: "10px 12px", fontWeight: 600 }}>Motivo</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {historicoCusto.map((h, idx) => {
+                                const anterior = historicoCusto[idx + 1];
+                                const subiu = anterior ? h.custoProducao > anterior.custoProducao : false;
+                                const desceu = anterior ? h.custoProducao < anterior.custoProducao : false;
+
+                                const dataFormatada = new Date(h.dataHora).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                });
+
+                                return (
+                                  <tr
+                                    key={h.id}
+                                    style={{
+                                      borderBottom: "1px solid #f2ede7",
+                                      background: idx === 0 ? "#fdfbf9" : "transparent",
+                                    }}
+                                  >
+                                    <td style={{ padding: "10px 12px", color: "var(--c-muted)" }}>
+                                      {dataFormatada}
+                                      {idx === 0 && (
+                                        <span style={{ marginLeft: "6px", fontSize: "10px", background: "#e8f3ee", color: "#4fa27a", padding: "1px 5px", borderRadius: "4px", fontWeight: 600 }}>
+                                          Atual
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td style={{ padding: "10px 12px", fontWeight: "bold" }}>
+                                      R$ {h.custoProducao.toFixed(2)}
+                                      {subiu && <TrendingUp size={12} style={{ color: "var(--c-danger)", display: "inline", marginLeft: "4px" }} />}
+                                      {desceu && <TrendingDown size={12} style={{ color: "#4fa27a", display: "inline", marginLeft: "4px" }} />}
+                                    </td>
+                                    <td style={{ padding: "10px 12px" }}>R$ {h.custoInsumos.toFixed(2)}</td>
+                                    <td style={{ padding: "10px 12px" }}>R$ {h.custoMaoDeObra.toFixed(2)}</td>
+                                    <td style={{ padding: "10px 12px", color: "var(--c-primary)", fontWeight: 600 }}>
+                                      R$ {h.precoVenda.toFixed(2)}
+                                    </td>
+                                    <td style={{ padding: "10px 12px" }}>
+                                      <span style={{ fontWeight: 600, color: h.margemLucroReal >= 50 ? "#4fa27a" : "#d97706" }}>
+                                        {Math.round(h.margemLucroReal)}%
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: "10px 12px", color: "var(--c-muted)", fontSize: "11px" }}>
+                                      {h.motivo || "Atualização de valores"}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </form>
           )}
         </div>
@@ -1065,6 +1314,117 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE GESTÃO DE TIPOS DE ITEM (Insumo, Embalagem, Acabado, Revenda, Semi-acabado) */}
+      {modalTiposAberto && (
+        <div className="modal-backdrop">
+          <div className="modal-window" style={{ maxWidth: "560px" }}>
+            <div className="modal-header">
+              <h3>Tipos de Item (Classificação)</h3>
+              <button onClick={() => setModalTiposAberto(false)} className="modal-close">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ padding: "20px", display: "grid", gap: "18px" }}>
+              {/* Cadastro de novo Tipo de Item */}
+              <div className="subpanel">
+                <h4 style={{ fontSize: "12px", marginBottom: "8px" }}>Cadastrar Novo Tipo de Item</h4>
+                <div style={{ display: "grid", gap: "8px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 100px", gap: "8px" }}>
+                    <input
+                      value={novoTipoNome}
+                      onChange={(e) => setNovoTipoNome(e.target.value)}
+                      placeholder="Ex: Mercadoria para Revenda..."
+                      style={{ padding: "6px 10px", border: "1px solid var(--c-border)", borderRadius: "6px" }}
+                    />
+                    <input
+                      value={novoTipoCodigo}
+                      onChange={(e) => setNovoTipoCodigo(e.target.value)}
+                      placeholder="Código (REV)"
+                      style={{ padding: "6px 10px", border: "1px solid var(--c-border)", borderRadius: "6px" }}
+                    />
+                  </div>
+                  <input
+                    value={novoTipoDescricao}
+                    onChange={(e) => setNovoTipoDescricao(e.target.value)}
+                    placeholder="Descrição do tipo de item..."
+                    style={{ padding: "6px 10px", border: "1px solid var(--c-border)", borderRadius: "6px" }}
+                  />
+                  <button
+                    className="button primary"
+                    style={{ justifySelf: "flex-end" }}
+                    onClick={async () => {
+                      if (!novoTipoNome.trim()) return;
+                      await saveTipoItem({
+                        nome: novoTipoNome,
+                        codigo: novoTipoCodigo,
+                        descricao: novoTipoDescricao,
+                      });
+                      setNovoTipoNome("");
+                      setNovoTipoCodigo("");
+                      setNovoTipoDescricao("");
+                      carregarDados();
+                      onAction("Tipo de item cadastrado!");
+                    }}
+                  >
+                    Salvar Tipo de Item
+                  </button>
+                </div>
+              </div>
+
+              {/* Listagem de Tipos Cadastrados */}
+              <div style={{ maxHeight: "250px", overflowY: "auto", border: "1px solid var(--c-border)", borderRadius: "8px", padding: "10px" }}>
+                {tiposItem.map((t) => (
+                  <div
+                    key={t.id}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "8px 4px",
+                      borderBottom: "1px solid #f5efe9",
+                    }}
+                  >
+                    <div>
+                      <strong>
+                        {t.nome} {t.codigo ? `(${t.codigo})` : ""}
+                      </strong>
+                      {t.padrao && (
+                        <span style={{ marginLeft: "6px", fontSize: "10px", background: "#f2ece6", color: "var(--c-primary)", padding: "1px 6px", borderRadius: "4px" }}>
+                          Padrão
+                        </span>
+                      )}
+                      {t.descricao && (
+                        <p style={{ margin: "2px 0 0", fontSize: "11px", color: "var(--c-muted)" }}>
+                          {t.descricao}
+                        </p>
+                      )}
+                    </div>
+                    {!t.padrao && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Excluir tipo de item "${t.nome}"?`)) return;
+                          try {
+                            await deleteTipoItem(t.id);
+                            carregarDados();
+                            onAction("Tipo de item excluído.");
+                          } catch (err: any) {
+                            alert(err.message);
+                          }
+                        }}
+                        style={{ color: "var(--c-danger)", fontSize: "11px", border: "none", background: "none", cursor: "pointer" }}
+                      >
+                        Excluir
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
