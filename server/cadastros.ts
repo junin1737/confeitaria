@@ -286,15 +286,21 @@ export type Fornecedor = {
 
 export async function proximoCodigoFornecedor(empresaId: number): Promise<string> {
   const result = await db.execute({
-    sql: `SELECT codigo FROM tb_fornecedor
-          WHERE empresa_id = ? AND codigo LIKE 'FOR-%'
-          ORDER BY id DESC LIMIT 1`,
+    sql: `SELECT codigo FROM tb_fornecedor WHERE empresa_id = ?`,
     args: [empresaId],
   });
 
-  if (!result.rows[0]) return "FOR-001";
-  const num = parseInt(String(result.rows[0].codigo).replace("FOR-", ""), 10);
-  return `FOR-${String((isNaN(num) ? 0 : num) + 1).padStart(3, "0")}`;
+  let maxNum = 0;
+  for (const row of result.rows) {
+    const raw = String(row.codigo || "");
+    const match = raw.match(/\d+/);
+    if (match) {
+      const val = parseInt(match[0], 10);
+      if (!isNaN(val) && val > maxNum) maxNum = val;
+    }
+  }
+
+  return `FOR-${String(maxNum + 1).padStart(3, "0")}`;
 }
 
 export async function listarFornecedores(empresaId: number): Promise<Fornecedor[]> {
@@ -467,15 +473,21 @@ export type Cliente = {
 
 export async function proximoCodigoCliente(empresaId: number): Promise<string> {
   const result = await db.execute({
-    sql: `SELECT codigo FROM tb_cliente
-          WHERE empresa_id = ? AND codigo LIKE 'CLI-%'
-          ORDER BY id DESC LIMIT 1`,
+    sql: `SELECT codigo FROM tb_cliente WHERE empresa_id = ?`,
     args: [empresaId],
   });
 
-  if (!result.rows[0]) return "CLI-001";
-  const num = parseInt(String(result.rows[0].codigo).replace("CLI-", ""), 10);
-  return `CLI-${String((isNaN(num) ? 0 : num) + 1).padStart(3, "0")}`;
+  let maxNum = 0;
+  for (const row of result.rows) {
+    const raw = String(row.codigo || "");
+    const match = raw.match(/\d+/);
+    if (match) {
+      const val = parseInt(match[0], 10);
+      if (!isNaN(val) && val > maxNum) maxNum = val;
+    }
+  }
+
+  return `CLI-${String(maxNum + 1).padStart(3, "0")}`;
 }
 
 export async function listarClientes(empresaId: number): Promise<Cliente[]> {
@@ -691,15 +703,21 @@ export type Produto = {
 
 export async function proximoCodigoProduto(empresaId: number): Promise<string> {
   const result = await db.execute({
-    sql: `SELECT codigo FROM tb_produto
-          WHERE empresa_id = ? AND codigo LIKE 'PRD-%'
-          ORDER BY id DESC LIMIT 1`,
+    sql: `SELECT codigo FROM tb_produto WHERE empresa_id = ?`,
     args: [empresaId],
   });
 
-  if (!result.rows[0]) return "PRD-001";
-  const num = parseInt(String(result.rows[0].codigo).replace("PRD-", ""), 10);
-  return `PRD-${String((isNaN(num) ? 0 : num) + 1).padStart(3, "0")}`;
+  let maxNum = 0;
+  for (const row of result.rows) {
+    const raw = String(row.codigo || "");
+    const match = raw.match(/\d+/);
+    if (match) {
+      const val = parseInt(match[0], 10);
+      if (!isNaN(val) && val > maxNum) maxNum = val;
+    }
+  }
+
+  return `PRD-${String(maxNum + 1).padStart(3, "0")}`;
 }
 
 export async function listarProdutos(empresaId: number): Promise<Produto[]> {

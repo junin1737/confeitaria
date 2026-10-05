@@ -207,9 +207,15 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     carregarHistorico(p.id);
   };
 
-  const iniciarNovoProduto = () => {
+  const iniciarNovoProduto = async () => {
+    try {
+      const prox = await fetchProximoCodigoProduto();
+      setProximoCod(prox);
+      setFormCodigo(prox);
+    } catch {
+      setFormCodigo(proximoCod);
+    }
     setSelectedId("new");
-    setFormCodigo(proximoCod);
     setFormNome("");
     setFormDescricao("");
     setFormTipoItemId(tiposItem.find((t) => t.padrao)?.id || tiposItem[0]?.id || null);
@@ -561,6 +567,20 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                 </div>
 
                 <div className="detail-actions">
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => {
+                      if (produtos.length > 0) {
+                        selecionarProduto(produtos[0]);
+                      } else {
+                        setSelectedId(null);
+                      }
+                      setFormError("");
+                    }}
+                  >
+                    Cancelar
+                  </button>
                   {selectedId !== "new" && selectedId != null ? (
                     <button
                       type="button"
@@ -1171,6 +1191,32 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                   </div>
                 </div>
               )}
+
+              {/* BARRA DE AÇÕES INFERIOR: CANCELAR E SALVAR */}
+              <div className="form-actions-bar" style={{ marginTop: "24px" }}>
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => {
+                    if (produtos.length > 0) {
+                      selecionarProduto(produtos[0]);
+                    } else {
+                      setSelectedId(null);
+                    }
+                    setFormError("");
+                  }}
+                  disabled={saving}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="button primary"
+                  disabled={saving}
+                >
+                  <Check size={16} /> {saving ? "Salvando..." : "Salvar produto"}
+                </button>
+              </div>
             </form>
           )}
         </div>

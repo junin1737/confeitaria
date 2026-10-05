@@ -3,7 +3,8 @@
  * PROJETO: Doce Gestor - Sistema de Gestão para Confeitarias
  * REPOSITÓRIO: https://github.com/junin1737/confeitaria
  * ARQUIVO: src/pages/SuppliersPage.tsx
- * DESCRIÇÃO: FASE 1 — Cadastro e Gestão de Fornecedores de Insumos e Embalagens.
+ * DESCRIÇÃO: FASE 1 — Cadastro e Gestão de Fornecedores com Formulário Dedicado,
+ *            Código Auto-incrementado (+1), Busca de CEP e Ações Salvar/Cancelar.
  * ============================================================================
  */
 
@@ -16,6 +17,7 @@ import {
   Search,
   Trash2,
   Truck,
+  X,
 } from "lucide-react";
 import {
   deleteFornecedor,
@@ -31,10 +33,13 @@ export function SuppliersPage({ onAction }: { onAction: (msg: string) => void })
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<number | "new" | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  // Controle de exibição do formulário dedicado
+  const [formAberto, setFormAberto] = useState(false);
+  const [modoEdicao, setModoEdicao] = useState<"novo" | "editar">("novo");
 
   // Form State
-  const [proximoCod, setProximoCod] = useState("");
   const [formCodigo, setFormCodigo] = useState("");
   const [formRazaoSocial, setFormRazaoSocial] = useState("");
   const [formNomeFantasia, setFormNomeFantasia] = useState("");
@@ -60,14 +65,10 @@ export function SuppliersPage({ onAction }: { onAction: (msg: string) => void })
   const carregarDados = async () => {
     setLoading(true);
     try {
-      const [lista, prox] = await Promise.all([
-        fetchFornecedores(),
-        fetchProximoCodigoFornecedor(),
-      ]);
+      const lista = await fetchFornecedores();
       setFornecedores(lista);
-      setProximoCod(prox);
       if (lista.length > 0 && selectedId === null) {
-        selecionarFornecedor(lista[0]);
+        setSelectedId(lista[0].id);
       }
     } catch (err: any) {
       onAction(err?.message || "Erro ao carregar fornecedores.");
@@ -80,7 +81,35 @@ export function SuppliersPage({ onAction }: { onAction: (msg: string) => void })
     carregarDados();
   }, []);
 
-  const selecionarFornecedor = (f: Fornecedor) => {
+  const abrirNovoFornecedor = async () => {
+    try {
+      const prox = await fetchProximoCodigoFornecedor();
+      setFormCodigo(prox);
+      setFormRazaoSocial("");
+      setFormNomeFantasia("");
+      setFormCnpjCpf("");
+      setFormTelefone("");
+      setFormCelular("");
+      setFormEmail("");
+      setFormContato("");
+      setFormCep("");
+      setFormLogradouro("");
+      setFormNumero("");
+      setFormComplemento("");
+      setFormBairro("");
+      setFormCidadeNome("");
+      setFormStatus("ativo");
+      setFormObservacoes("");
+      setCepMessage("");
+      setFormError("");
+      setModoEdicao("novo");
+      setFormAberto(true);
+    } catch (err: any) {
+      onAction("Erro ao obter próximo código de fornecedor.");
+    }
+  };
+
+  const abrirEditarFornecedor = (f: Fornecedor) => {
     setSelectedId(f.id);
     setFormCodigo(f.codigo);
     setFormRazaoSocial(f.razaoSocial);
@@ -100,28 +129,14 @@ export function SuppliersPage({ onAction }: { onAction: (msg: string) => void })
     setFormObservacoes(f.observacoes || "");
     setCepMessage("");
     setFormError("");
+    setModoEdicao("editar");
+    setFormAberto(true);
   };
 
-  const iniciarNovoFornecedor = () => {
-    setSelectedId("new");
-    setFormCodigo(proximoCod);
-    setFormRazaoSocial("");
-    setFormNomeFantasia("");
-    setFormCnpjCpf("");
-    setFormTelefone("");
-    setFormCelular("");
-    setFormEmail("");
-    setFormContato("");
-    setFormCep("");
-    setFormLogradouro("");
-    setFormNumero("");
-    setFormComplemento("");
-    setFormBairro("");
-    setFormCidadeNome("");
-    setFormStatus("ativo");
-    setFormObservacoes("");
-    setCepMessage("");
+  const fecharFormulario = () => {
+    setFormAberto(false);
     setFormError("");
+    setCepMessage("");
   };
 
   const handleBuscarCep = async () => {
@@ -137,9 +152,9 @@ export function SuppliersPage({ onAction }: { onAction: (msg: string) => void })
       setFormLogradouro(res.logradouro || "");
       setFormBairro(res.bairro || "");
       setFormCidadeNome(res.cidadeNome || "");
-      setCepMessage(res.generico ? "CEP geral preenchido." : "Endereço localizado!");
-    } catch {
-      setCepMessage("CEP não encontrado.");
+      setCepMessage(res.generico ? "CEP geral da cidade preenchido." : "Endereço localizado!");
+    } catch (err: any) {
+      setCepMessage("CEP não localizado.");
     } finally {
       setCepLoading(false);
     }
@@ -152,9 +167,10 @@ export function SuppliersPage({ onAction }: { onAction: (msg: string) => void })
       return;
     }
     setSaving(true);
+    setFormError("");
     try {
       const salvo = await saveFornecedor({
-        id: selectedId === "new" || selectedId == null ? undefined : selectedId,
+        id: modoEdicao === "editar" && selectedId ? selectedId : undefined,
         codigo: formCodigo,
         razaoSocial: formRazaoSocial,
         nomeFantasia: formNomeFantasia,
@@ -175,6 +191,7 @@ export function SuppliersPage({ onAction }: { onAction: (msg: string) => void })
       onAction(`Fornecedor "${salvo.razaoSocial}" salvo com sucesso!`);
       await carregarDados();
       setSelectedId(salvo.id);
+      setFormAberto(false);
     } catch (err: any) {
       setFormError(err?.message || "Erro ao salvar fornecedor.");
     } finally {
@@ -219,6 +236,8 @@ export function SuppliersPage({ onAction }: { onAction: (msg: string) => void })
     );
   });
 
+  const fornecedorAtivo = fornecedores.find((f) => f.id === selectedId) || null;
+
   return (
     <>
       <section className="page-heading">
@@ -237,7 +256,7 @@ export function SuppliersPage({ onAction }: { onAction: (msg: string) => void })
           <button className="button secondary" onClick={exportarCsv}>
             <Download size={16} /> Exportar
           </button>
-          <button className="button primary" onClick={iniciarNovoFornecedor}>
+          <button className="button primary" onClick={abrirNovoFornecedor}>
             <Plus size={17} /> Novo fornecedor
           </button>
         </div>
@@ -274,14 +293,14 @@ export function SuppliersPage({ onAction }: { onAction: (msg: string) => void })
                 <button
                   key={item.id}
                   className={`employee-row ${ativo ? "selected" : ""}`}
-                  onClick={() => selecionarFornecedor(item)}
+                  onClick={() => setSelectedId(item.id)}
                 >
-                  <div className="employee-avatar" style={{ background: "#edf3fa", color: "#6982a3" }}>
+                  <div className="employee-avatar" style={{ background: "#edf3fa", color: "#617c9b" }}>
                     <Truck size={17} />
                   </div>
                   <div className="employee-row-copy">
                     <strong>{item.nomeFantasia || item.razaoSocial}</strong>
-                    <span>{item.codigo} • {item.contato || item.telefone || "Sem contato"}</span>
+                    <span>{item.codigo} • {item.cidadeNome || "Sem cidade"}</span>
                   </div>
                 </button>
               );
@@ -289,37 +308,40 @@ export function SuppliersPage({ onAction }: { onAction: (msg: string) => void })
           </div>
         </div>
 
-        {/* Painel Direito: Formulário e Detalhes */}
+        {/* Painel Direito: Cartão de Visão Geral do Fornecedor */}
         <div className="employee-detail panel">
-          {selectedId == null && !loading ? (
+          {!fornecedorAtivo && !loading ? (
             <div className="employee-empty" style={{ padding: "60px 20px" }}>
               <Truck size={36} style={{ color: "#d0c7c1", margin: "0 auto 12px" }} />
-              <strong>Selecione um fornecedor ao lado</strong>
-              <p>Ou clique no botão "Novo fornecedor" para cadastrar.</p>
+              <strong>Nenhum fornecedor selecionado</strong>
+              <p>Clique em um fornecedor ao lado ou no botão "Novo fornecedor" para cadastrar.</p>
+              <button className="button primary" style={{ marginTop: "14px" }} onClick={abrirNovoFornecedor}>
+                <Plus size={16} /> Novo fornecedor
+              </button>
             </div>
-          ) : (
-            <form onSubmit={handleSubmit}>
+          ) : fornecedorAtivo ? (
+            <div>
               <div className="employee-detail-head">
                 <div className="detail-title">
                   <div
                     className="employee-avatar"
-                    style={{ background: "#edf3fa", color: "#6982a3", width: "44px", height: "44px" }}
+                    style={{ background: "#edf3fa", color: "#617c9b", width: "48px", height: "48px" }}
                   >
-                    <Truck size={22} />
+                    <Truck size={24} />
                   </div>
                   <div>
                     <span className="live-pill">
-                      {selectedId === "new" ? "NOVO FORNECEDOR" : formStatus.toUpperCase()}
+                      {fornecedorAtivo.status.toUpperCase()}
                     </span>
-                    <h2>{formNomeFantasia || formRazaoSocial || "Novo Fornecedor"}</h2>
-                    <p>{formCodigo} • {formContato ? `Contato: ${formContato}` : "Sem representante"}</p>
+                    <h2>{fornecedorAtivo.nomeFantasia || fornecedorAtivo.razaoSocial}</h2>
+                    <p>{fornecedorAtivo.codigo} • {fornecedorAtivo.razaoSocial}</p>
                   </div>
                 </div>
 
                 <div className="detail-actions">
-                  {formCelular && (
+                  {fornecedorAtivo.celular && (
                     <a
-                      href={whatsappUrl(formCelular, `Olá ${formContato || ""}, tudo bem? Aqui é da confeitaria!`)}
+                      href={whatsappUrl(fornecedorAtivo.celular, `Olá, aqui é da confeitaria sobre cotação de insumos!`)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="button secondary"
@@ -328,148 +350,331 @@ export function SuppliersPage({ onAction }: { onAction: (msg: string) => void })
                       <MessageCircle size={15} /> WhatsApp
                     </a>
                   )}
-                  {selectedId !== "new" && selectedId != null ? (
-                    <button
-                      type="button"
-                      className="button secondary"
-                      onClick={() => handleExcluir(selectedId)}
-                      style={{ color: "var(--c-danger)" }}
-                    >
-                      <Trash2 size={14} /> Excluir
-                    </button>
-                  ) : null}
-                  <button type="submit" disabled={saving} className="button primary">
-                    <Check size={14} /> {saving ? "Salvando..." : "Salvar fornecedor"}
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => abrirEditarFornecedor(fornecedorAtivo)}
+                  >
+                    Editar dados
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => handleExcluir(fornecedorAtivo.id)}
+                    style={{ color: "var(--c-danger)" }}
+                  >
+                    <Trash2 size={14} /> Excluir
                   </button>
                 </div>
               </div>
 
+              {/* Informações Resumidas do Fornecedor */}
+              <div className="detail-stat-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", marginTop: "20px" }}>
+                <div>
+                  <span>Contato Principal</span>
+                  <strong>{fornecedorAtivo.contato || "Representante Geral"}</strong>
+                  <small>{fornecedorAtivo.celular || fornecedorAtivo.telefone || "Sem telefone"}</small>
+                </div>
+                <div>
+                  <span>CNPJ / CPF</span>
+                  <strong>{fornecedorAtivo.cnpjCpf || "Não cadastrado"}</strong>
+                  <small>Documento fiscal da empresa</small>
+                </div>
+                <div>
+                  <span>Localização</span>
+                  <strong>{fornecedorAtivo.cidadeNome || "Não informada"}</strong>
+                  <small>{fornecedorAtivo.bairro ? `Bairro: ${fornecedorAtivo.bairro}` : "Sem bairro"}</small>
+                </div>
+              </div>
+
+              <div className="detail-sections" style={{ marginTop: "16px" }}>
+                <div className="subpanel">
+                  <div className="subpanel-head">
+                    <div>
+                      <div className="section-kicker">Canais</div>
+                      <h3>Contatos Diretos</h3>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: "12px", display: "grid", gap: "10px", fontSize: "13px" }}>
+                    <div><strong>E-mail:</strong> {fornecedorAtivo.email || "Não informado"}</div>
+                    <div><strong>Telefone Comercial:</strong> {fornecedorAtivo.telefone || "Não informado"}</div>
+                    <div><strong>WhatsApp / Celular:</strong> {fornecedorAtivo.celular || "Não informado"}</div>
+                  </div>
+                </div>
+
+                <div className="subpanel">
+                  <div className="subpanel-head">
+                    <div>
+                      <div className="section-kicker">Distribuição</div>
+                      <h3>Endereço</h3>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: "12px", display: "grid", gap: "8px", fontSize: "13px" }}>
+                    <div><strong>CEP:</strong> {fornecedorAtivo.cep || "Não informado"}</div>
+                    <div><strong>Logradouro:</strong> {fornecedorAtivo.logradouro || "Não informado"}, {fornecedorAtivo.numero || "S/N"}</div>
+                    <div><strong>Bairro:</strong> {fornecedorAtivo.bairro || "—"}</div>
+                    <div><strong>Cidade/UF:</strong> {fornecedorAtivo.cidadeNome || "—"}</div>
+                  </div>
+                </div>
+              </div>
+
+              {fornecedorAtivo.observacoes && (
+                <div className="subpanel" style={{ marginTop: "16px" }}>
+                  <div className="subpanel-head">
+                    <div>
+                      <div className="section-kicker">Histórico & Prazos</div>
+                      <h3>Observações e Condições Comerciais</h3>
+                    </div>
+                  </div>
+                  <p style={{ marginTop: "10px", fontSize: "13px", color: "var(--c-text)", lineHeight: 1.5 }}>
+                    {fornecedorAtivo.observacoes}
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      {/* ========================================================================= */}
+      {/* FORMULÁRIO DEDICADO DE CADASTRO / EDIÇÃO DE FORNECEDOR                    */}
+      {/* ========================================================================= */}
+      {formAberto && (
+        <div className="modal-backdrop">
+          <div className="modal-window" style={{ maxWidth: "760px" }}>
+            <div className="modal-header">
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div className="brand-mark" style={{ width: "32px", height: "32px", background: "#617c9b" }}>
+                  <Truck size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0 }}>
+                    {modoEdicao === "novo" ? "Cadastrar Novo Fornecedor" : `Editar Fornecedor — ${formRazaoSocial}`}
+                  </h3>
+                  <small style={{ color: "var(--c-muted)", fontSize: "11px" }}>
+                    Código Interno: <b>{formCodigo}</b>
+                  </small>
+                </div>
+              </div>
+              <button type="button" onClick={fecharFormulario} className="modal-close">
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} style={{ padding: "22px" }}>
               {formError && (
-                <div style={{ padding: "10px 14px", margin: "14px 0", background: "#fdf2f2", color: "#991b1b", borderRadius: "8px", fontSize: "12px" }}>
+                <div style={{ padding: "12px 16px", marginBottom: "18px", background: "#fdf2f2", color: "#991b1b", borderRadius: "10px", fontSize: "13px" }}>
                   {formError}
                 </div>
               )}
 
-              {/* Seções de Detalhe (.detail-sections) */}
-              <div className="detail-sections" style={{ marginTop: "20px" }}>
-                {/* Dados da Empresa */}
-                <div className="subpanel">
-                  <div className="subpanel-head">
-                    <div>
-                      <div className="section-kicker">Identificação</div>
-                      <h3>Dados da Empresa</h3>
-                    </div>
+              {/* SEÇÃO 1: IDENTIFICAÇÃO DA EMPRESA */}
+              <fieldset style={{ border: "none", padding: 0, margin: "0 0 20px 0" }}>
+                <div className="section-kicker">Identificação Jurídica</div>
+                <div className="form-grid">
+                  <div className="field">
+                    <label>Código Interno</label>
+                    <input value={formCodigo} readOnly />
                   </div>
-                  <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "100px 1fr", gap: "10px" }}>
-                      <div className="field">
-                        <label>Código</label>
-                        <input value={formCodigo} onChange={(e) => setFormCodigo(e.target.value)} required />
-                      </div>
-                      <div className="field">
-                        <label>Razão Social *</label>
-                        <input value={formRazaoSocial} onChange={(e) => setFormRazaoSocial(e.target.value)} required />
-                      </div>
-                    </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                      <div className="field">
-                        <label>Nome Fantasia</label>
-                        <input value={formNomeFantasia} onChange={(e) => setFormNomeFantasia(e.target.value)} />
-                      </div>
-                      <div className="field">
-                        <label>CNPJ / CPF</label>
-                        <input value={formCnpjCpf} onChange={(e) => setFormCnpjCpf(e.target.value)} placeholder="00.000.000/0001-00" />
-                      </div>
-                    </div>
+                  <div className="field span-2">
+                    <label>Razão Social / Nome Oficial *</label>
+                    <input
+                      value={formRazaoSocial}
+                      onChange={(e) => setFormRazaoSocial(e.target.value)}
+                      placeholder="Ex: Cacau & Confeitos Distribuidora LTDA"
+                      required
+                      autoFocus
+                    />
+                  </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                      <div className="field">
-                        <label>Vendedor / Representante</label>
-                        <input value={formContato} onChange={(e) => setFormContato(e.target.value)} placeholder="Nome do representante" />
-                      </div>
-                      <div className="field">
-                        <label>Celular / WhatsApp</label>
-                        <input value={formCelular} onChange={(e) => setFormCelular(e.target.value)} placeholder="(11) 99999-9999" />
-                      </div>
-                    </div>
+                  <div className="field span-2">
+                    <label>Nome Fantasia (Como você conhece)</label>
+                    <input
+                      value={formNomeFantasia}
+                      onChange={(e) => setFormNomeFantasia(e.target.value)}
+                      placeholder="Ex: Cacau Distribuidora"
+                    />
+                  </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                      <div className="field">
-                        <label>Telefone Comercial</label>
-                        <input value={formTelefone} onChange={(e) => setFormTelefone(e.target.value)} />
-                      </div>
-                      <div className="field">
-                        <label>E-mail para Pedidos</label>
-                        <input type="email" value={formEmail} onChange={(e) => setFormEmail(e.target.value)} />
-                      </div>
-                    </div>
+                  <div className="field">
+                    <label>CNPJ / CPF</label>
+                    <input
+                      value={formCnpjCpf}
+                      onChange={(e) => setFormCnpjCpf(e.target.value)}
+                      placeholder="00.000.000/0000-00"
+                    />
                   </div>
                 </div>
+              </fieldset>
 
-                {/* Endereço & Insumos */}
-                <div className="subpanel">
-                  <div className="subpanel-head">
-                    <div>
-                      <div className="section-kicker">Localização & Linha de Fornecimento</div>
-                      <h3>Endereço e Notas</h3>
-                    </div>
+              {/* SEÇÃO 2: CONTATO E REPRESENTANTE */}
+              <fieldset style={{ border: "none", padding: 0, margin: "0 0 20px 0" }}>
+                <div className="section-kicker">Contato & Comercial</div>
+                <div className="form-grid">
+                  <div className="field">
+                    <label>Nome do Representante / Contato</label>
+                    <input
+                      value={formContato}
+                      onChange={(e) => setFormContato(e.target.value)}
+                      placeholder="Ex: Carlos (Vendedor)"
+                    />
                   </div>
-                  <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-                    <div className="field">
-                      <label>CEP</label>
-                      <div style={{ display: "flex", gap: "8px" }}>
-                        <input value={formCep} onChange={(e) => setFormCep(e.target.value)} placeholder="00000-000" style={{ flex: 1 }} />
-                        <button type="button" className="button secondary" onClick={handleBuscarCep} disabled={cepLoading} style={{ height: "34px", fontSize: "11px" }}>
-                          {cepLoading ? "Buscando..." : "Buscar CEP"}
-                        </button>
-                      </div>
-                      {cepMessage && <small style={{ color: "var(--c-muted)", fontSize: "10px", marginTop: "4px" }}>{cepMessage}</small>}
-                    </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 90px", gap: "10px" }}>
-                      <div className="field">
-                        <label>Logradouro / Rua</label>
-                        <input value={formLogradouro} onChange={(e) => setFormLogradouro(e.target.value)} />
-                      </div>
-                      <div className="field">
-                        <label>Número</label>
-                        <input value={formNumero} onChange={(e) => setFormNumero(e.target.value)} />
-                      </div>
-                    </div>
+                  <div className="field">
+                    <label>WhatsApp / Celular Comercial</label>
+                    <input
+                      value={formCelular}
+                      onChange={(e) => setFormCelular(e.target.value)}
+                      placeholder="(11) 98765-4321"
+                    />
+                  </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                      <div className="field">
-                        <label>Bairro</label>
-                        <input value={formBairro} onChange={(e) => setFormBairro(e.target.value)} />
-                      </div>
-                      <div className="field">
-                        <label>Cidade / UF</label>
-                        <input value={formCidadeNome} onChange={(e) => setFormCidadeNome(e.target.value)} placeholder="Ex: São Paulo / SP" />
-                      </div>
-                    </div>
+                  <div className="field">
+                    <label>Telefone Fixo</label>
+                    <input
+                      value={formTelefone}
+                      onChange={(e) => setFormTelefone(e.target.value)}
+                      placeholder="(11) 3456-7890"
+                    />
+                  </div>
 
-                    <div className="field">
-                      <label>Complemento</label>
-                      <input value={formComplemento} onChange={(e) => setFormComplemento(e.target.value)} />
-                    </div>
+                  <div className="field span-2">
+                    <label>E-mail para Pedidos e Cotações</label>
+                    <input
+                      type="email"
+                      value={formEmail}
+                      onChange={(e) => setFormEmail(e.target.value)}
+                      placeholder="pedidos@fornecedor.com.br"
+                    />
+                  </div>
 
-                    <div className="field">
-                      <label>Linha de Insumos Fornecidos / Observações</label>
-                      <textarea
-                        rows={2}
-                        value={formObservacoes}
-                        onChange={(e) => setFormObservacoes(e.target.value)}
-                        placeholder="Ex: Fornece chocolates nobres, confeitos, cakeboards... Dias de entrega, pedido mínimo..."
+                  <div className="field">
+                    <label>Status</label>
+                    <select
+                      value={formStatus}
+                      onChange={(e) => setFormStatus(e.target.value as "ativo" | "inativo")}
+                    >
+                      <option value="ativo">Ativo</option>
+                      <option value="inativo">Inativo</option>
+                    </select>
+                  </div>
+                </div>
+              </fieldset>
+
+              {/* SEÇÃO 3: LOCALIZAÇÃO */}
+              <fieldset style={{ border: "none", padding: 0, margin: "0 0 20px 0" }}>
+                <div className="section-kicker">Endereço da Empresa</div>
+                <div className="form-grid">
+                  <div className="field cep-field">
+                    <label>CEP</label>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <input
+                        value={formCep}
+                        onChange={(e) => setFormCep(e.target.value)}
+                        placeholder="00000-000"
+                        style={{ flex: 1 }}
                       />
+                      <button
+                        type="button"
+                        className="button secondary"
+                        onClick={handleBuscarCep}
+                        disabled={cepLoading}
+                        style={{ height: "40px", padding: "0 14px" }}
+                      >
+                        {cepLoading ? "Buscando..." : "Buscar CEP"}
+                      </button>
                     </div>
+                    {cepMessage && (
+                      <small style={{ color: "var(--c-primary)", fontSize: "11px", marginTop: "4px", display: "block" }}>
+                        {cepMessage}
+                      </small>
+                    )}
+                  </div>
+
+                  <div className="field span-2">
+                    <label>Rua / Logradouro</label>
+                    <input
+                      value={formLogradouro}
+                      onChange={(e) => setFormLogradouro(e.target.value)}
+                      placeholder="Ex: Avenida Industrial"
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label>Número</label>
+                    <input
+                      value={formNumero}
+                      onChange={(e) => setFormNumero(e.target.value)}
+                      placeholder="500"
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label>Complemento / Galpão</label>
+                    <input
+                      value={formComplemento}
+                      onChange={(e) => setFormComplemento(e.target.value)}
+                      placeholder="Galpão 3"
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label>Bairro</label>
+                    <input
+                      value={formBairro}
+                      onChange={(e) => setFormBairro(e.target.value)}
+                      placeholder="Distrito Industrial"
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label>Cidade / UF</label>
+                    <input
+                      value={formCidadeNome}
+                      onChange={(e) => setFormCidadeNome(e.target.value)}
+                      placeholder="São Paulo / SP"
+                    />
                   </div>
                 </div>
+              </fieldset>
+
+              {/* SEÇÃO 4: CONDIÇÕES & PRAZOS */}
+              <fieldset style={{ border: "none", padding: 0, margin: "0 0 10px 0" }}>
+                <div className="section-kicker">Condições Comerciais & Prazos</div>
+                <div className="field">
+                  <label>Observações Comerciais (Dias de entrega, pedido mínimo, prazo de faturamento)</label>
+                  <textarea
+                    rows={3}
+                    value={formObservacoes}
+                    onChange={(e) => setFormObservacoes(e.target.value)}
+                    placeholder="Ex: Entrega toda terça e quinta. Pedido mínimo de R$ 300,00. Boleto 28 dias."
+                  />
+                </div>
+              </fieldset>
+
+              {/* BARRA DE AÇÕES: CANCELAR E SALVAR */}
+              <div className="form-actions-bar">
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={fecharFormulario}
+                  disabled={saving}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="button primary"
+                  disabled={saving}
+                >
+                  <Check size={16} /> {saving ? "Salvando..." : "Salvar fornecedor"}
+                </button>
               </div>
             </form>
-          )}
+          </div>
         </div>
-      </section>
+      )}
     </>
   );
 }
