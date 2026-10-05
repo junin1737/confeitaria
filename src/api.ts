@@ -483,6 +483,7 @@ export type Insumo = {
   estoqueAtual: number;
   estoqueMinimo: number;
   marca: string | null;
+  fornecedorId?: number | null;
   criadoEm: string;
 };
 
@@ -497,6 +498,7 @@ export type InsumoInput = {
   estoqueAtual?: number;
   estoqueMinimo?: number;
   marca?: string;
+  fornecedorId?: number | null;
 };
 
 export type ReceitaItemDetalhado = {
@@ -651,4 +653,299 @@ export async function simularReceita(dados: any): Promise<MetricasPrecificacao> 
   const data = await readJson<{ metricas: MetricasPrecificacao }>(response);
   return data.metricas;
 }
+
+/**
+ * ============================================================================
+ * [FASE 1: CADASTROS PADRÃO (GRUPOS, SUBGRUPOS, FORNECEDORES, CLIENTES, PRODUTOS)]
+ * ============================================================================
+ */
+
+export type GrupoProduto = {
+  id: number;
+  nome: string;
+  cor: string;
+  totalSubgrupos?: number;
+  totalProdutos?: number;
+};
+
+export type SubgrupoProduto = {
+  id: number;
+  grupoId: number;
+  grupoNome?: string;
+  nome: string;
+};
+
+export async function fetchGrupos(): Promise<GrupoProduto[]> {
+  const res = await fetch("/api/grupos", { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar grupos");
+  const data = await readJson<{ grupos: GrupoProduto[] }>(res);
+  return data.grupos;
+}
+
+export async function saveGrupo(dados: { id?: number; nome: string; cor?: string }): Promise<GrupoProduto> {
+  const res = await fetch("/api/grupos", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ grupo?: GrupoProduto; erro?: string }>(res);
+  if (!res.ok || !data.grupo) throw new Error(data.erro || "Erro ao salvar grupo");
+  return data.grupo;
+}
+
+export async function deleteGrupo(id: number): Promise<void> {
+  const res = await fetch(`/api/grupos/${id}`, { method: "DELETE", credentials: "include" });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao excluir grupo");
+}
+
+export async function fetchSubgrupos(grupoId?: number): Promise<SubgrupoProduto[]> {
+  const url = grupoId ? `/api/subgrupos?grupoId=${grupoId}` : "/api/subgrupos";
+  const res = await fetch(url, { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar subgrupos");
+  const data = await readJson<{ subgrupos: SubgrupoProduto[] }>(res);
+  return data.subgrupos;
+}
+
+export async function saveSubgrupo(dados: { id?: number; grupoId: number; nome: string }): Promise<SubgrupoProduto> {
+  const res = await fetch("/api/subgrupos", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ subgrupo?: SubgrupoProduto; erro?: string }>(res);
+  if (!res.ok || !data.subgrupo) throw new Error(data.erro || "Erro ao salvar subgrupo");
+  return data.subgrupo;
+}
+
+export async function deleteSubgrupo(id: number): Promise<void> {
+  const res = await fetch(`/api/subgrupos/${id}`, { method: "DELETE", credentials: "include" });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao excluir subgrupo");
+}
+
+// --- FORNECEDORES ---
+export type Fornecedor = {
+  id: number;
+  codigo: string;
+  razaoSocial: string;
+  nomeFantasia: string | null;
+  cnpjCpf: string | null;
+  telefone: string | null;
+  celular: string | null;
+  email: string | null;
+  contato: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  cidadeId: number | null;
+  cidadeNome?: string | null;
+  ufSigla?: string | null;
+  status: "ativo" | "inativo";
+  observacoes: string | null;
+  criadoEm: string;
+};
+
+export async function fetchProximoCodigoFornecedor(): Promise<string> {
+  const res = await fetch("/api/fornecedores/proximo-codigo", { credentials: "include" });
+  const data = await readJson<{ proximoCodigo: string }>(res);
+  return data.proximoCodigo;
+}
+
+export async function fetchFornecedores(): Promise<Fornecedor[]> {
+  const res = await fetch("/api/fornecedores", { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar fornecedores");
+  const data = await readJson<{ fornecedores: Fornecedor[] }>(res);
+  return data.fornecedores;
+}
+
+export async function saveFornecedor(dados: Partial<Fornecedor>): Promise<Fornecedor> {
+  const res = await fetch("/api/fornecedores", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ fornecedor?: Fornecedor; erro?: string }>(res);
+  if (!res.ok || !data.fornecedor) throw new Error(data.erro || "Erro ao salvar fornecedor");
+  return data.fornecedor;
+}
+
+export async function deleteFornecedor(id: number): Promise<void> {
+  const res = await fetch(`/api/fornecedores/${id}`, { method: "DELETE", credentials: "include" });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao excluir fornecedor");
+}
+
+// --- CLIENTES ---
+export type Cliente = {
+  id: number;
+  codigo: string;
+  nome: string;
+  cpfCnpj: string | null;
+  telefone: string | null;
+  celular: string | null;
+  email: string | null;
+  dataNascimento: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  cidadeId: number | null;
+  cidadeNome?: string | null;
+  ufSigla?: string | null;
+  status: "ativo" | "inativo";
+  observacoes: string | null;
+  criadoEm: string;
+};
+
+export async function fetchProximoCodigoCliente(): Promise<string> {
+  const res = await fetch("/api/clientes/proximo-codigo", { credentials: "include" });
+  const data = await readJson<{ proximoCodigo: string }>(res);
+  return data.proximoCodigo;
+}
+
+export async function fetchClientes(): Promise<Cliente[]> {
+  const res = await fetch("/api/clientes", { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar clientes");
+  const data = await readJson<{ clientes: Cliente[] }>(res);
+  return data.clientes;
+}
+
+export async function saveCliente(dados: Partial<Cliente>): Promise<Cliente> {
+  const res = await fetch("/api/clientes", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ cliente?: Cliente; erro?: string }>(res);
+  if (!res.ok || !data.cliente) throw new Error(data.erro || "Erro ao salvar cliente");
+  return data.cliente;
+}
+
+export async function deleteCliente(id: number): Promise<void> {
+  const res = await fetch(`/api/clientes/${id}`, { method: "DELETE", credentials: "include" });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao excluir cliente");
+}
+
+// --- PRODUTOS (COM FICHA TÉCNICA EMBUTIDA) ---
+export type ProdutoItemReceita = {
+  id?: number;
+  insumoId: number;
+  insumoNome: string;
+  categoria: string;
+  quantidade: number;
+  unidade: string;
+  custoUnitario: number;
+  custoTotalItem: number;
+};
+
+export type Produto = {
+  id: number;
+  codigo: string;
+  nome: string;
+  descricao: string | null;
+  grupoId: number | null;
+  grupoNome?: string | null;
+  subgrupoId: number | null;
+  subgrupoNome?: string | null;
+  unidadeVenda: string;
+  precoCusto: number;
+  precoVenda: number;
+  margemLucroRealPercent: number;
+  estoqueAtual: number;
+  estoqueMinimo: number;
+  status: "ativo" | "inativo";
+  fotoUrl: string | null;
+  criadoEm: string;
+  atualizadoEm: string;
+
+  // Ficha Técnica / Receita
+  temReceita: boolean;
+  rendimentoQuantidade: number;
+  rendimentoUnidade: string;
+  tempoPreparoMinutos: number;
+  custoHoraTrabalho: number;
+  percentualCustosFixos: number;
+  margemLucroDesejada: number;
+  precoSugerido: number;
+  modoPreparo: string | null;
+  itensReceita: ProdutoItemReceita[];
+
+  // Métricas de Custo
+  custoInsumos: number;
+  custoMaoDeObra: number;
+  custoFixos: number;
+  custoTotalProducao: number;
+  custoPorUnidade: number;
+  lucroRealPorUnidade: number;
+  lucroRealTotal: number;
+};
+
+export type ProdutoInput = {
+  id?: number;
+  codigo?: string;
+  nome: string;
+  descricao?: string;
+  grupoId?: number | null;
+  subgrupoId?: number | null;
+  unidadeVenda?: string;
+  precoVenda?: number;
+  estoqueAtual?: number;
+  estoqueMinimo?: number;
+  temReceita?: boolean;
+  rendimentoQuantidade?: number;
+  rendimentoUnidade?: string;
+  tempoPreparoMinutos?: number;
+  custoHoraTrabalho?: number;
+  percentualCustosFixos?: number;
+  margemLucroDesejada?: number;
+  modoPreparo?: string;
+  status?: "ativo" | "inativo";
+  fotoUrl?: string;
+  itensReceita?: {
+    insumoId: number;
+    quantidade: number;
+    unidade?: string;
+  }[];
+};
+
+export async function fetchProximoCodigoProduto(): Promise<string> {
+  const res = await fetch("/api/produtos/proximo-codigo", { credentials: "include" });
+  const data = await readJson<{ proximoCodigo: string }>(res);
+  return data.proximoCodigo;
+}
+
+export async function fetchProdutos(): Promise<Produto[]> {
+  const res = await fetch("/api/produtos", { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar produtos");
+  const data = await readJson<{ produtos: Produto[] }>(res);
+  return data.produtos;
+}
+
+export async function saveProduto(dados: ProdutoInput): Promise<Produto> {
+  const res = await fetch("/api/produtos", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ produto?: Produto; erro?: string }>(res);
+  if (!res.ok || !data.produto) throw new Error(data.erro || "Erro ao salvar produto");
+  return data.produto;
+}
+
+export async function deleteProduto(id: number): Promise<void> {
+  const res = await fetch(`/api/produtos/${id}`, { method: "DELETE", credentials: "include" });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao excluir produto");
+}
+
 

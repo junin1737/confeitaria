@@ -51,6 +51,29 @@ import {
   excluirReceita,
   calcularTotaisReceita,
 } from "./precificacao";
+import {
+  listarGrupos,
+  salvarGrupo,
+  excluirGrupo,
+  listarSubgrupos,
+  salvarSubgrupo,
+  excluirSubgrupo,
+  listarFornecedores,
+  obterFornecedor,
+  salvarFornecedor,
+  excluirFornecedor,
+  proximoCodigoFornecedor,
+  listarClientes,
+  obterCliente,
+  salvarCliente,
+  excluirCliente,
+  proximoCodigoCliente,
+  listarProdutos,
+  obterProduto,
+  salvarProduto,
+  excluirProduto,
+  proximoCodigoProduto,
+} from "./cadastros";
 import { migrate } from "./db/migrate";
 import { seed } from "./db/seed";
 
@@ -664,6 +687,239 @@ async function start() {
       res.json({ metricas });
     } catch (e: any) {
       res.status(500).json({ erro: e?.message || "Erro ao simular precificação" });
+    }
+  });
+
+  /**
+   * ============================================================================
+   * [FASE 1: ROTAS DE CADASTROS PADRÃO (GRUPOS, SUBGRUPOS, FORNECEDORES, CLIENTES, PRODUTOS)]
+   * ============================================================================
+   */
+
+  // --- GRUPOS DE PRODUTOS ---
+  app.get("/api/grupos", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      res.json({ grupos: await listarGrupos(req.usuario!.empresaId) });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar grupos" });
+    }
+  });
+
+  app.post("/api/grupos", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await salvarGrupo(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json({ grupo: result });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar grupo" });
+    }
+  });
+
+  app.delete("/api/grupos/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await excluirGrupo(req.usuario!.empresaId, Number(req.params.id));
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao excluir grupo" });
+    }
+  });
+
+  // --- SUBGRUPOS DE PRODUTOS ---
+  app.get("/api/subgrupos", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const grupoId = req.query.grupoId ? Number(req.query.grupoId) : undefined;
+      res.json({ subgrupos: await listarSubgrupos(req.usuario!.empresaId, grupoId) });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar subgrupos" });
+    }
+  });
+
+  app.post("/api/subgrupos", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await salvarSubgrupo(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json({ subgrupo: result });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar subgrupo" });
+    }
+  });
+
+  app.delete("/api/subgrupos/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await excluirSubgrupo(req.usuario!.empresaId, Number(req.params.id));
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao excluir subgrupo" });
+    }
+  });
+
+  // --- FORNECEDORES ---
+  app.get("/api/fornecedores/proximo-codigo", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      res.json({ proximoCodigo: await proximoCodigoFornecedor(req.usuario!.empresaId) });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao gerar código de fornecedor" });
+    }
+  });
+
+  app.get("/api/fornecedores", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      res.json({ fornecedores: await listarFornecedores(req.usuario!.empresaId) });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar fornecedores" });
+    }
+  });
+
+  app.get("/api/fornecedores/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const fornecedor = await obterFornecedor(req.usuario!.empresaId, Number(req.params.id));
+      if (!fornecedor) {
+        res.status(404).json({ erro: "Fornecedor não encontrado" });
+        return;
+      }
+      res.json({ fornecedor });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao obter fornecedor" });
+    }
+  });
+
+  app.post("/api/fornecedores", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await salvarFornecedor(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json({ fornecedor: result });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar fornecedor" });
+    }
+  });
+
+  app.delete("/api/fornecedores/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await excluirFornecedor(req.usuario!.empresaId, Number(req.params.id));
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao excluir fornecedor" });
+    }
+  });
+
+  // --- CLIENTES ---
+  app.get("/api/clientes/proximo-codigo", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      res.json({ proximoCodigo: await proximoCodigoCliente(req.usuario!.empresaId) });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao gerar código de cliente" });
+    }
+  });
+
+  app.get("/api/clientes", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      res.json({ clientes: await listarClientes(req.usuario!.empresaId) });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar clientes" });
+    }
+  });
+
+  app.get("/api/clientes/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const cliente = await obterCliente(req.usuario!.empresaId, Number(req.params.id));
+      if (!cliente) {
+        res.status(404).json({ erro: "Cliente não encontrado" });
+        return;
+      }
+      res.json({ cliente });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao obter cliente" });
+    }
+  });
+
+  app.post("/api/clientes", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await salvarCliente(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json({ cliente: result });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar cliente" });
+    }
+  });
+
+  app.delete("/api/clientes/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await excluirCliente(req.usuario!.empresaId, Number(req.params.id));
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao excluir cliente" });
+    }
+  });
+
+  // --- PRODUTOS (COM FICHA TÉCNICA EMBUTIDA) ---
+  app.get("/api/produtos/proximo-codigo", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      res.json({ proximoCodigo: await proximoCodigoProduto(req.usuario!.empresaId) });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao gerar código de produto" });
+    }
+  });
+
+  app.get("/api/produtos", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      res.json({ produtos: await listarProdutos(req.usuario!.empresaId) });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar produtos" });
+    }
+  });
+
+  app.get("/api/produtos/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const produto = await obterProduto(req.usuario!.empresaId, Number(req.params.id));
+      if (!produto) {
+        res.status(404).json({ erro: "Produto não encontrado" });
+        return;
+      }
+      res.json({ produto });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao obter produto" });
+    }
+  });
+
+  app.post("/api/produtos", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await salvarProduto(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json({ produto: result });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar produto" });
+    }
+  });
+
+  app.delete("/api/produtos/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await excluirProduto(req.usuario!.empresaId, Number(req.params.id));
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao excluir produto" });
     }
   });
 

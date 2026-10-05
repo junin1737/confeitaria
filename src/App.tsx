@@ -39,14 +39,16 @@ import {
   LogOut,
   ShieldCheck,
 } from "lucide-react";
-import { NAV_GROUPS, PLACEHOLDERS } from "./data";
-import type { PageKey } from "./data";
+import { NAV_GROUPS, PLACEHOLDERS, type PageKey } from "./data";
 import { PlaceholderPage } from "./pages/AppPages";
 import { DashboardPage } from "./pages/DashboardPage";
 import { EmployeesPage } from "./pages/EmployeesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AdminPage } from "./pages/AdminPage";
-import { CatalogPage } from "./pages/CatalogPage";
+import { ProductsPage } from "./pages/ProductsPage";
+import { StockPage } from "./pages/StockPage";
+import { CustomersPage } from "./pages/CustomersPage";
+import { SuppliersPage } from "./pages/SuppliersPage";
 import { fetchMe, iniciais, logoutRequest, type UsuarioSessao } from "./api";
 import { LoginPage } from "./pages/LoginPage";
 import { applyTheme, loadSavedTheme, saveTheme, type ThemeColors } from "./theme";
@@ -270,9 +272,12 @@ export default function App() {
           {page === "dashboard" ? (
             <DashboardPage onAction={notify} onNavigate={(next) => goTo(next)} userName={firstName} />
           ) : null}
-          {page === "catalogo" || page === "estoque" || page === "producao" ? (
-            <CatalogPage />
+          {page === "catalogo" || page === "producao" ? (
+            <ProductsPage onAction={notify} />
           ) : null}
+          {page === "estoque" ? <StockPage onAction={notify} /> : null}
+          {page === "clientes" ? <CustomersPage onAction={notify} /> : null}
+          {page === "fornecedores" ? <SuppliersPage onAction={notify} /> : null}
           {page === "funcionarios" ? <EmployeesPage onAction={notify} /> : null}
           {page === "configuracoes" ? (
             <SettingsPage colors={colors} onColorsChange={setColors} onAction={notify} />
@@ -282,8 +287,10 @@ export default function App() {
           page !== "configuracoes" &&
           page !== "admin" &&
           page !== "catalogo" &&
+          page !== "producao" &&
           page !== "estoque" &&
-          page !== "producao" ? (
+          page !== "clientes" &&
+          page !== "fornecedores" ? (
             <PlaceholderPage
               iconKey={page}
               title={PLACEHOLDERS[page].title}

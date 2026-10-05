@@ -178,10 +178,110 @@ const STATEMENTS = [
     unidade TEXT NOT NULL DEFAULT 'g'
   )`,
 
-  // 15. Índices de Otimização Fase 1
+  // 15. Fase 1: tb_subgrupo_produto (Subcategorias vinculadas ao grupo pai)
+  `CREATE TABLE IF NOT EXISTS tb_subgrupo_produto (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    grupo_id INTEGER NOT NULL REFERENCES tb_grupo_produto(id) ON DELETE CASCADE,
+    nome TEXT NOT NULL,
+    UNIQUE (empresa_id, grupo_id, nome)
+  )`,
+
+  // 16. Fase 1: tb_fornecedor (Fornecedores de insumos, embalagens e serviços)
+  `CREATE TABLE IF NOT EXISTS tb_fornecedor (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    codigo TEXT NOT NULL,
+    razao_social TEXT NOT NULL,
+    nome_fantasia TEXT,
+    cnpj_cpf TEXT,
+    telefone TEXT,
+    celular TEXT,
+    email TEXT,
+    contato TEXT,
+    cep TEXT,
+    logradouro TEXT,
+    numero TEXT,
+    complemento TEXT,
+    bairro TEXT,
+    cidade_id INTEGER REFERENCES tb_cidade(id),
+    status TEXT NOT NULL DEFAULT 'ativo',
+    observacoes TEXT,
+    criado_em TEXT NOT NULL,
+    UNIQUE (empresa_id, codigo)
+  )`,
+
+  // 17. Fase 1: tb_cliente (Clientes para encomendas, aniversários e delivery)
+  `CREATE TABLE IF NOT EXISTS tb_cliente (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    codigo TEXT NOT NULL,
+    nome TEXT NOT NULL,
+    cpf_cnpj TEXT,
+    telefone TEXT,
+    celular TEXT,
+    email TEXT,
+    data_nascimento TEXT,
+    cep TEXT,
+    logradouro TEXT,
+    numero TEXT,
+    complemento TEXT,
+    bairro TEXT,
+    cidade_id INTEGER REFERENCES tb_cidade(id),
+    status TEXT NOT NULL DEFAULT 'ativo',
+    observacoes TEXT,
+    criado_em TEXT NOT NULL,
+    UNIQUE (empresa_id, codigo)
+  )`,
+
+  // 18. Fase 1: tb_produto (Produtos finais comercializáveis com Ficha Técnica / Receita integrada)
+  `CREATE TABLE IF NOT EXISTS tb_produto (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    codigo TEXT NOT NULL,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    grupo_id INTEGER REFERENCES tb_grupo_produto(id),
+    subgrupo_id INTEGER REFERENCES tb_subgrupo_produto(id),
+    unidade_venda TEXT NOT NULL DEFAULT 'unidade',
+    preco_custo REAL NOT NULL DEFAULT 0,
+    preco_venda REAL NOT NULL DEFAULT 0,
+    estoque_atual REAL DEFAULT 0,
+    estoque_minimo REAL DEFAULT 0,
+    tem_receita INTEGER NOT NULL DEFAULT 1,
+    rendimento_quantidade REAL NOT NULL DEFAULT 1,
+    rendimento_unidade TEXT NOT NULL DEFAULT 'unidade',
+    tempo_preparo_minutos INTEGER NOT NULL DEFAULT 60,
+    custo_hora_trabalho REAL NOT NULL DEFAULT 20.0,
+    percentual_custos_fixos REAL NOT NULL DEFAULT 15.0,
+    margem_lucro_desejada REAL NOT NULL DEFAULT 100.0,
+    preco_sugerido REAL NOT NULL DEFAULT 0,
+    modo_preparo TEXT,
+    status TEXT NOT NULL DEFAULT 'ativo',
+    foto_url TEXT,
+    criado_em TEXT NOT NULL,
+    atualizado_em TEXT NOT NULL,
+    UNIQUE (empresa_id, codigo)
+  )`,
+
+  // 19. Fase 1: tb_produto_insumo (Itens e quantidades da receita vinculados ao Produto)
+  `CREATE TABLE IF NOT EXISTS tb_produto_insumo (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    produto_id INTEGER NOT NULL REFERENCES tb_produto(id) ON DELETE CASCADE,
+    insumo_id INTEGER NOT NULL REFERENCES tb_insumo(id),
+    quantidade REAL NOT NULL,
+    unidade TEXT NOT NULL DEFAULT 'g'
+  )`,
+
+  // 20. Índices de Otimização Fase 1
   `CREATE INDEX IF NOT EXISTS idx_insumo_empresa ON tb_insumo (empresa_id)`,
   `CREATE INDEX IF NOT EXISTS idx_receita_empresa ON tb_receita (empresa_id)`,
   `CREATE INDEX IF NOT EXISTS idx_receita_item_receita ON tb_receita_item (receita_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_subgrupo_grupo ON tb_subgrupo_produto (grupo_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_fornecedor_empresa ON tb_fornecedor (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_cliente_empresa ON tb_cliente (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_produto_empresa ON tb_produto (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_produto_insumo_produto ON tb_produto_insumo (produto_id)`,
 ];
 
 /**
@@ -222,4 +322,7 @@ export async function migrate() {
 
   // Migrações incrementais na tabela de usuários
   await ensureColumn("tb_usuario", "email", "TEXT");
+
+  // Migrações incrementais na tabela de insumos (vínculo com fornecedor)
+  await ensureColumn("tb_insumo", "fornecedor_id", "INTEGER REFERENCES tb_fornecedor(id)");
 }
