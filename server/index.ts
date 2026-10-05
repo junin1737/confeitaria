@@ -237,13 +237,26 @@ async function start() {
 
   // Auto-cadastro (self-service) para confeitarias piloto com 15 dias de Trial
   app.post("/api/auth/registrar", async (req, res) => {
+    const nomeCompleto = String(req.body?.nomeCompleto ?? "").trim();
     const nomeAtelie = String(req.body?.nomeAtelie ?? "").trim();
     const email = String(req.body?.email ?? "").trim().toLowerCase();
-    const senha = String(req.body?.senha ?? "").trim();
     const telefone = String(req.body?.telefone ?? "").trim();
+    const senha = String(req.body?.senha ?? "").trim();
 
-    if (!nomeAtelie || !email || !senha) {
-      res.status(400).json({ erro: "Preencha o nome do ateliê, e-mail e senha." });
+    if (!nomeCompleto) {
+      res.status(400).json({ erro: "Informe o seu nome completo." });
+      return;
+    }
+    if (!nomeAtelie) {
+      res.status(400).json({ erro: "Informe o nome do seu ateliê ou confeitaria." });
+      return;
+    }
+    if (!email || !email.includes("@")) {
+      res.status(400).json({ erro: "Informe um e-mail válido para ser usado como login." });
+      return;
+    }
+    if (!telefone) {
+      res.status(400).json({ erro: "Informe seu WhatsApp ou telefone de contato." });
       return;
     }
     if (senha.length < 4) {
@@ -254,7 +267,8 @@ async function start() {
     const result = await criarEmpresaAdmin({
       nome: nomeAtelie,
       email,
-      telefone: telefone || undefined,
+      telefone,
+      nomeCompletoUsuario: nomeCompleto,
       plano: "trial",
       diasValidade: 15,
       senhaAdmin: senha,

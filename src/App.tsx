@@ -266,6 +266,27 @@ export default function App() {
               <div className="profile-avatar small">{avatar}</div>
               <ChevronsUpDown size={14} />
             </div>
+            <button
+              className="button secondary"
+              onClick={handleLogout}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "6px 14px",
+                fontSize: "13px",
+                fontWeight: 700,
+                color: "#c62828",
+                borderColor: "#fecaca",
+                background: "#fef2f2",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
+              title="Encerrar sessão"
+            >
+              <LogOut size={15} />
+              <span>Sair</span>
+            </button>
           </div>
         </header>
 

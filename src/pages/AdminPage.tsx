@@ -57,6 +57,7 @@ export function AdminPage() {
 
   // Form nova empresa
   const [formNome, setFormNome] = useState("");
+  const [formNomeUsuario, setFormNomeUsuario] = useState("");
   const [formEmail, setFormEmail] = useState("");
   const [formTelefone, setFormTelefone] = useState("");
   const [formPlano, setFormPlano] = useState("mensal");
@@ -97,18 +98,38 @@ export function AdminPage() {
   async function handleCriarEmpresa(e: React.FormEvent) {
     e.preventDefault();
     setErroForm("");
+
+    if (!formNome.trim()) {
+      setErroForm("Informe o nome da empresa.");
+      return;
+    }
+    if (!formNomeUsuario.trim()) {
+      setErroForm("Informe o nome completo do responsável/usuário.");
+      return;
+    }
+    if (!formEmail.trim() || !formEmail.includes("@")) {
+      setErroForm("Informe um e-mail válido para ser usado como login.");
+      return;
+    }
+    if (!formTelefone.trim()) {
+      setErroForm("Informe o telefone/WhatsApp do usuário.");
+      return;
+    }
+
     setSalvando(true);
     try {
       await criarEmpresaAdminApi({
-        nome: formNome,
-        email: formEmail,
-        telefone: formTelefone || undefined,
+        nome: formNome.trim(),
+        nomeCompletoUsuario: formNomeUsuario.trim(),
+        email: formEmail.trim().toLowerCase(),
+        telefone: formTelefone.trim(),
         plano: formPlano,
         diasValidade: formDias,
         senhaAdmin: formSenha,
       });
       setModalNova(false);
       setFormNome("");
+      setFormNomeUsuario("");
       setFormEmail("");
       setFormTelefone("");
       carregar();
@@ -688,7 +709,19 @@ export function AdminPage() {
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#4f4540", marginBottom: "4px" }}>E-mail da Confeiteira (Login) *</label>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#4f4540", marginBottom: "4px" }}>Nome Completo do Usuário/Responsável *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Maria Aparecida da Silva"
+                  value={formNomeUsuario}
+                  onChange={(e) => setFormNomeUsuario(e.target.value)}
+                  style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ebdcd5", fontSize: "13px" }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#4f4540", marginBottom: "4px" }}>E-mail do Usuário (Login) *</label>
                 <input
                   type="email"
                   required
@@ -700,10 +733,11 @@ export function AdminPage() {
               </div>
 
               <div>
-                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#4f4540", marginBottom: "4px" }}>WhatsApp / Telefone</label>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 700, color: "#4f4540", marginBottom: "4px" }}>WhatsApp / Telefone de Contato *</label>
                 <input
                   type="text"
-                  placeholder="11999998888"
+                  required
+                  placeholder="(11) 99999-8888"
                   value={formTelefone}
                   onChange={(e) => setFormTelefone(e.target.value)}
                   style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #ebdcd5", fontSize: "13px" }}

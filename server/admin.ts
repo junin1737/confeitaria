@@ -214,7 +214,8 @@ export async function obterEmpresaAdmin(id: number): Promise<EmpresaAdmin | null
 export async function criarEmpresaAdmin(dados: {
   nome: string;
   email: string;
-  telefone?: string;
+  telefone: string;
+  nomeCompletoUsuario?: string;
   documento?: string;
   plano?: string;
   diasValidade?: number;
@@ -222,8 +223,20 @@ export async function criarEmpresaAdmin(dados: {
 }) {
   const nome = dados.nome.trim();
   const email = dados.email.trim().toLowerCase();
-  if (!nome || !email) {
-    return { erro: "Nome da empresa e e-mail são obrigatórios." };
+  const telefone = dados.telefone?.trim();
+  const nomeUsuario = dados.nomeCompletoUsuario?.trim() || `Admin ${nome}`;
+
+  if (!nome) {
+    return { erro: "Nome da empresa/ateliê é obrigatório." };
+  }
+  if (!email || !email.includes("@")) {
+    return { erro: "Informe um e-mail válido para login." };
+  }
+  if (!telefone) {
+    return { erro: "Telefone/WhatsApp de contato é obrigatório." };
+  }
+  if (dados.nomeCompletoUsuario !== undefined && !nomeUsuario) {
+    return { erro: "Nome completo do usuário é obrigatório." };
   }
 
   // Impede duplicidade de e-mail no sistema
@@ -232,7 +245,7 @@ export async function criarEmpresaAdmin(dados: {
     args: [email, email],
   });
   if (check.rows.length > 0) {
-    return { erro: "Já existe uma empresa cadastrada com este e-mail." };
+    return { erro: "Já existe uma empresa ou usuário cadastrado com este e-mail." };
   }
 
   const plano = dados.plano || "trial";
@@ -249,7 +262,7 @@ export async function criarEmpresaAdmin(dados: {
     args: [
       nome,
       email,
-      dados.telefone?.trim() ?? null,
+      telefone,
       dados.documento?.trim() ?? null,
       plano,
       serial,
@@ -263,11 +276,11 @@ export async function criarEmpresaAdmin(dados: {
   const senhaPura = dados.senhaAdmin?.trim() || "123456";
   const senhaHash = bcrypt.hashSync(senhaPura, 10);
 
-  // Cria usuário administrador do ateliê
+  // Cria usuário administrador do ateliê (login = email)
   await db.execute({
     sql: `INSERT INTO tb_usuario (empresa_id, login, email, nome, senha_hash, perfil, status, criado_em)
           VALUES (?, ?, ?, ?, ?, 'admin', 'ativo', ?)`,
-    args: [empresaId, email, email, `Admin ${nome}`, senhaHash, agora],
+    args: [empresaId, email, email, nomeUsuario, senhaHash, agora],
   });
 
   // Provisiona mensagens e dados iniciais

@@ -465,7 +465,8 @@ export async function lookupCnpj(cnpj: string): Promise<CnpjConsultaDto> {
 export async function criarEmpresaAdminApi(dados: {
   nome: string;
   email: string;
-  telefone?: string;
+  telefone: string;
+  nomeCompletoUsuario?: string;
   plano?: string;
   diasValidade?: number;
   senhaAdmin?: string;
@@ -531,10 +532,11 @@ export async function renovarSerialEmpresaApi(id: number, plano?: string) {
 }
 
 export async function registrarConfeitariaApi(dados: {
+  nomeCompleto: string;
   nomeAtelie: string;
   email: string;
+  telefone: string;
   senha: string;
-  telefone?: string;
 }) {
   const response = await fetch("/api/auth/registrar", {
     method: "POST",

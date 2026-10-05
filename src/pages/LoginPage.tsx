@@ -22,6 +22,7 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
   const [modo, setModo] = useState<"login" | "cadastro">("login");
   const [login, setLogin] = useState("");
   const [senha, setSenha] = useState("");
+  const [nomeCompleto, setNomeCompleto] = useState("");
   const [nomeAtelie, setNomeAtelie] = useState("");
   const [telefone, setTelefone] = useState("");
   const [lembrar, setLembrar] = useState(true);
@@ -45,13 +46,36 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
   async function cadastrar(e: FormEvent) {
     e.preventDefault();
     setErro("");
+
+    if (!nomeCompleto.trim()) {
+      setErro("Informe o seu nome completo.");
+      return;
+    }
+    if (!nomeAtelie.trim()) {
+      setErro("Informe o nome do seu ateliê ou confeitaria.");
+      return;
+    }
+    if (!login.trim() || !login.includes("@")) {
+      setErro("Informe um e-mail válido para o login.");
+      return;
+    }
+    if (!telefone.trim()) {
+      setErro("Informe o seu telefone/WhatsApp de contato.");
+      return;
+    }
+    if (senha.length < 4) {
+      setErro("A senha deve ter no mínimo 4 caracteres.");
+      return;
+    }
+
     setLoading(true);
     try {
       const session = await registrarConfeitariaApi({
-        nomeAtelie,
-        email: login,
+        nomeCompleto: nomeCompleto.trim(),
+        nomeAtelie: nomeAtelie.trim(),
+        email: login.trim().toLowerCase(),
+        telefone: telefone.trim(),
         senha,
-        telefone,
       });
       if (session) {
         onLoggedIn(session);
@@ -132,35 +156,49 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
           )}
 
           {modo === "cadastro" && (
-            <label className="login-field">
-              <span>Nome do seu Ateliê ou Confeitaria *</span>
-              <input
-                required
-                value={nomeAtelie}
-                onChange={(event) => setNomeAtelie(event.target.value)}
-                placeholder="Ex: Ateliê Doce Afeto"
-              />
-            </label>
+            <>
+              <label className="login-field">
+                <span>Seu Nome Completo *</span>
+                <input
+                  required
+                  value={nomeCompleto}
+                  onChange={(event) => setNomeCompleto(event.target.value)}
+                  placeholder="Ex: Maria da Silva Oliveira"
+                />
+              </label>
+
+              <label className="login-field">
+                <span>Nome do seu Ateliê ou Confeitaria *</span>
+                <input
+                  required
+                  value={nomeAtelie}
+                  onChange={(event) => setNomeAtelie(event.target.value)}
+                  placeholder="Ex: Ateliê Doce Afeto"
+                />
+              </label>
+            </>
           )}
 
           <label className="login-field">
-            <span>{modo === "cadastro" ? "Seu E-mail principal *" : "Usuário ou e-mail"}</span>
+            <span>{modo === "cadastro" ? "Seu E-mail principal (usado no login) *" : "E-mail ou Usuário *"}</span>
             <input
+              type="text"
               autoComplete="username"
               required
               value={login}
               onChange={(event) => setLogin(event.target.value)}
-              placeholder={modo === "cadastro" ? "seuemail@exemplo.com" : "Master"}
+              placeholder={modo === "cadastro" ? "seuemail@exemplo.com" : "seuemail@exemplo.com ou Master"}
             />
           </label>
 
           {modo === "cadastro" && (
             <label className="login-field">
-              <span>WhatsApp para contato</span>
+              <span>WhatsApp / Telefone para contato *</span>
               <input
+                required
                 value={telefone}
                 onChange={(event) => setTelefone(event.target.value)}
-                placeholder="11999998888"
+                placeholder="(11) 99999-8888"
               />
             </label>
           )}
