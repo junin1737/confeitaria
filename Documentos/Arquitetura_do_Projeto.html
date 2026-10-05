@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Arquitetura do Projeto — Doce Gestor</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Playfair+Display:wght@700&family=JetBrains+Mono:wght@400;600&display=swap');
+    
+    :root {
+      --primary: #b33951;
+      --secondary: #8c533e;
+      --accent: #d4954a;
+      --dark: #231c19;
+      --muted: #665b55;
+      --border: #e6dbd4;
+      --bg-page: #ffffff;
+      --code-bg: #26201e;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: var(--dark);
+      background: #faf8f6;
+      line-height: 1.6;
+      padding: 30px;
+      font-size: 13px;
+    }
+
+    .doc-container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 48px 56px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    }
+
+    .header {
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+
+    .repo-badge {
+      display: inline-block;
+      background: #fbf0f2;
+      color: var(--primary);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 28px;
+      color: var(--primary);
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--secondary);
+      font-weight: 500;
+    }
+
+    .github-link {
+      display: block;
+      margin-top: 8px;
+      font-size: 12px;
+      color: #0366d6;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    h2 {
+      font-size: 18px;
+      color: var(--dark);
+      border-left: 4px solid var(--primary);
+      padding-left: 10px;
+      margin-top: 30px;
+      margin-bottom: 14px;
+    }
+
+    h3 {
+      font-size: 14px;
+      color: var(--secondary);
+      margin-top: 18px;
+      margin-bottom: 8px;
+    }
+
+    p { margin-bottom: 12px; color: #423833; }
+
+    ul, ol { margin-left: 20px; margin-bottom: 14px; color: #423833; }
+    li { margin-bottom: 4px; }
+
+    .highlight-card {
+      background: #fdf8f6;
+      border: 1px solid #ebdcd5;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 16px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 12px;
+    }
+
+    th {
+      background: #f5ebe6;
+      color: var(--secondary);
+      text-align: left;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      font-weight: 700;
+    }
+
+    td {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      color: #38302c;
+    }
+
+    pre {
+      background: var(--code-bg);
+      color: #f5ede8;
+      padding: 14px 18px;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      overflow-x: auto;
+      margin: 14px 0;
+      line-height: 1.45;
+    }
+
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      background: #f4eae5;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 11.5px;
+      color: var(--primary);
+    }
+
+    .footer {
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+      margin-top: 40px;
+      font-size: 11px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    @media print {
+      body { background: none; padding: 0; }
+      .doc-container { box-shadow: none; border-radius: 0; padding: 20px; max-width: 100%; }
+      h2 { page-break-after: avoid; }
+      pre, table, .highlight-card { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="doc-container">
+  <div class="header">
+    <div class="repo-badge">Documentação de Engenharia</div>
+    <h1>Doce Gestor — Arquitetura de Software do Projeto</h1>
+    <div class="subtitle">Sistema SaaS Web Multiempresa Especializado para Confeitarias e Pequenos Negócios de Alimentação</div>
+    <a class="github-link" href="https://github.com/junin1737/confeitaria" target="_blank">
+      🔗 Repositório GitHub Oficial: https://github.com/junin1737/confeitaria
+    </a>
+  </div>
+
+  <h2>1. Visão Geral e Modelo de Negócio</h2>
+  <p>
+    O <strong>Doce Gestor</strong> foi concebido como uma plataforma comercial de software como serviço (SaaS), desenvolvida para atender inicialmente confeiteiras que trabalham em casa (produção artesanal e encomendas) e preparada para escalar para confeitarias físicas, padarias e pequenos estabelecimentos de alimentação.
+  </p>
+  <p>
+    Diferente de sistemas ERP genéricos que impõem barreiras contábeis e burocráticas complexas, o Doce Gestor foi desenhado sob o princípio de <strong>baixa fricção operacional</strong>: o foco central é resolver as dores reais do nicho, como formação de preço e custos por grama (fichas técnicas), gerenciamento visual de encomendas com controle de sinal (50%) e geração de cardápio digital público integrado ao WhatsApp.
+  </p>
+
+  <h2>2. Princípios Arquiteturais</h2>
+  <ul>
+    <li><strong>Isolamento Multi-Tenant Rigoroso:</strong> Todas as tabelas operacionais possuem a chave estrangeira <code>empresa_id</code>. Consultas nunca misturam dados de confeitarias concorrentes.</li>
+    <li><strong>Portabilidade de Banco de Dados:</strong> O uso da biblioteca <code>@libsql/client</code> viabiliza desenvolvimento local com SQLite e migração para produção em nuvem distribuída (Turso Serverless) sem alterar nenhuma linha de SQL.</li>
+    <li><strong>Modularidade e Baixo Acoplamento:</strong> A interface do usuário (SPA em React 19) e a lógica de negócios (API REST Express 5) operam desacopladas, preparando a arquitetura para suportar futuros aplicativos mobile (Flutter/React Native).</li>
+    <li><strong>Preservação da Integridade Histórica:</strong> Alterações de preços de insumos, percentuais de comissão e demissões de funcionários nunca recalculam vendas, pedidos ou folhas de pagamento fechadas no passado.</li>
+  </ul>
+
+  <h2>3. Topologia e Stack Tecnológica</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Camada</th>
+        <th>Tecnologia</th>
+        <th>Propósito / Justificativa</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Frontend</strong></td>
+        <td>React 19 + TypeScript + Vite 8</td>
+        <td>SPA de alta velocidade, tipagem estática e reatividade nativa.</td>
+      </tr>
+      <tr>
+        <td><strong>Ícones & Design</strong></td>
+        <td>Lucide React + CSS Moderno</td>
+        <td>Design system customizável com 10 temas prontos de confeitaria.</td>
+      </tr>
+      <tr>
+        <td><strong>Backend API</strong></td>
+        <td>Node.js + Express 5 + TSX</td>
+        <td>API REST assíncrona, robusta e modular.</td>
+      </tr>
+      <tr>
+        <td><strong>Banco de Dados</strong></td>
+        <td>@libsql/client (SQLite / Turso)</td>
+        <td>Base local de alto desempenho em dev e cluster global em prod.</td>
+      </tr>
+      <tr>
+        <td><strong>Segurança & Cripto</strong></td>
+        <td>BcryptJS + Tokens Criptográficos</td>
+        <td>Armazenamento seguro de senhas com salt e sessões HttpOnly.</td>
+      </tr>
+      <tr>
+        <td><strong>Controle de Versão</strong></td>
+        <td>Git + GitHub</td>
+        <td>Repositório oficial: <code>https://github.com/junin1737/confeitaria</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>4. Arquitetura Multi-Tenant & Modelo de Licenças</h2>
+  <div class="highlight-card">
+    <p><strong>Ciclo de Vida do Tenant:</strong></p>
+    <ol>
+      <li><strong>Registro Self-Service ou Administrativo:</strong> A confeiteira cria a conta informando e-mail, senha e nome do ateliê. Uma nova <code>tb_empresa</code> é inserida no status <code>ativa</code> com plano <code>trial</code> de 15 dias.</li>
+      <li><strong>Geração de Chave Serial:</strong> Cada confeitaria recebe uma chave única no padrão <code>DG-XXXX-YYYY-ANO</code>.</li>
+      <li><strong>Middleware de Licença Ativa (<code>requireActiveLicense</code>):</strong> A cada requisição nas rotas de negócio, o backend valida se <code>status != 'bloqueada'</code> e se a data <code>expira_em</code> é futura. Se vencido ou bloqueado, retorna <code>403 Forbidden</code> com mensagem amigável.</li>
+      <li><strong>Acesso Master:</strong> O usuário administrador ('Master') possui perfil imune a bloqueios, acessando o Painel Master de Gestão.</li>
+    </ol>
+  </div>
+
+  <h2>5. Diagrama do Modelo de Dados Relacional (ERD)</h2>
+  <pre>
+┌─────────────────────────────────┐
+│           tb_empresa            │ (Tenant Raiz)
+├─────────────────────────────────┤
+│ id (PK)                         │
+│ nome, email, telefone, documento│
+│ status ('ativa','bloqueada',...)│
+│ plano ('trial','mensal','anual')│
+│ serial_key, expira_em, slug     │
+└───────────────┬─────────────────┘
+                │ 1:N
+   ┌────────────┼───────────────────────────┬──────────────────────┐
+   ▼            ▼                           ▼                      ▼
+┌────────────┐ ┌──────────────────────┐ ┌──────────────────┐ ┌────────────────┐
+│ tb_usuario │ │    tb_funcionario    │ │ tb_grupo_produto │ │  tb_mensagem   │
+├────────────┤ ├──────────────────────┤ ├──────────────────┤ ├────────────────┤
+│ id (PK)    │ │ id (PK)              │ │ id (PK)          │ │ id (PK)        │
+│ empresa_id │ │ empresa_id           │ │ empresa_id       │ │ empresa_id     │
+│ login      │ │ codigo (ex:FUNC-001) │ │ nome, cor        │ │ chave, titulo  │
+│ senha_hash │ │ nome, cpf, celular   │ └────────┬─────────┘ │ texto          │
+│ perfil     │ │ cep, uf_id, cidade_id│          │ 1:N       └────────────────┘
+└─────┬──────┘ │ salario_fixo, status │          │
+      │ 1:N    └──────────────────────┘          ▼
+      ▼                                 ┌──────────────────┐
+┌────────────┐                          │  tb_venda_grupo  │
+│ tb_sessao  │                          ├──────────────────┤
+├────────────┤                          │ id (PK)          │
+│ id (token) │                          │ empresa_id       │
+│ usuario_id │                          │ grupo_id         │
+│ expira_em  │                          │ data, valor      │
+└────────────┘                          │ custo, pedidos   │
+                                        └──────────────────┘
+  </pre>
+
+  <h2>6. API REST de Integração Externa (Para Painéis do Cliente)</h2>
+  <p>
+    Para permitir que o proprietário do software bloqueie, libere ou crie confeitarias diretamente por outros sistemas externos ou gateways de pagamento, o backend expõe endpoints protegidos por Chave Mestre (<code>X-Admin-Api-Key</code>):
+  </p>
+  <ul>
+    <li><code>GET /api/admin/empresas</code> — Retorna a lista de todas as confeitarias, status, seriais e saldo de dias restantes.</li>
+    <li><code>POST /api/admin/empresas</code> — Provisiona uma nova confeitaria remotamente.</li>
+    <li><code>PATCH /api/admin/empresas/:id/status</code> — Altera o status (ex: bloqueia por falta de pagamento ou libera).</li>
+    <li><code>POST /api/admin/empresas/:id/prorrogar</code> — Adiciona dias de validade à licença (+30 dias, +365 dias).</li>
+    <li><code>POST /api/admin/empresas/:id/serial</code> — Gera uma nova chave serial para o ateliê.</li>
+  </ul>
+
+  <h2>7. Próximas Fases e Roteiro de Implementação</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Etapa</th>
+        <th>Módulo</th>
+        <th>Entregáveis</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Fase 0 (Concluída)</strong></td>
+        <td>Fundação SaaS & Admin</td>
+        <td>Multi-tenant, Painel Master, Bloqueio em Tempo Real, Auto-cadastro Trial e Repositório Git.</td>
+      </tr>
+      <tr>
+        <td><strong>Fase 1 (Próxima)</strong></td>
+        <td>Insumos & Fichas Técnicas</td>
+        <td>Conversão de unidades (g, kg, ml), custo por receita, custos invisíveis (gás/energia) e preço sugerido.</td>
+      </tr>
+      <tr>
+        <td><strong>Fase 2</strong></td>
+        <td>Cardápio Digital Público</td>
+        <td>Página responsiva mobile-first (<code>/cardapio/:slug</code>) e envio de pedido formatado no WhatsApp.</td>
+      </tr>
+      <tr>
+        <td><strong>Fase 3</strong></td>
+        <td>Gestão de Encomendas</td>
+        <td>Kanban de produção, agenda de entregas do fim de semana e lista consolidada de compras.</td>
+      </tr>
+      <tr>
+        <td><strong>Fase 4</strong></td>
+        <td>Financeiro & Equipe</td>
+        <td>Fluxo de caixa, integração com comissões de funcionários por forma de pagamento e folha.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <span>Doce Gestor — Documentação de Arquitetura</span>
+    <span>Repositório: https://github.com/junin1737/confeitaria</span>
+  </div>
+</div>
+
+</body>
+</html>
