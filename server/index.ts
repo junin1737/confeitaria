@@ -23,6 +23,7 @@ import express, { type Request, type Response } from "express";
 import { autenticar, criarSessao, encerrarSessao, obterUsuarioPorSessao } from "./auth";
 import {
   alterarStatusEmpresa,
+  atualizarFichaEmpresa,
   criarEmpresaAdmin,
   listarEmpresasAdmin,
   obterEmpresaAdmin,
@@ -30,6 +31,7 @@ import {
   renovarSerialEmpresa,
   verificarAcessoEmpresa,
 } from "./admin";
+import { consultarCnpj } from "./cnpj";
 import { evolucaoDiaria, evolucaoMensal, resumoPeriodo, variacao, vendasPorGrupo } from "./dashboard";
 import {
   atualizarFuncionario,
@@ -297,7 +299,7 @@ async function start() {
     res.json({ ok: true });
   });
 
-  // Dados da licença da confeitaria logada
+  // Dados da licença e Ficha Cadastral da confeitaria logada
   app.get("/api/empresa/licenca", requireAuth, async (req: AuthedRequest, res) => {
     const empresa = await obterEmpresaAdmin(req.usuario!.empresaId);
     if (!empresa) {
@@ -305,6 +307,36 @@ async function start() {
       return;
     }
     res.json({ licenca: empresa });
+  });
+
+  // Obter Ficha Cadastral da Empresa logada
+  app.get("/api/empresa/dados", requireAuth, async (req: AuthedRequest, res) => {
+    const empresa = await obterEmpresaAdmin(req.usuario!.empresaId);
+    if (!empresa) {
+      res.status(404).json({ erro: "Empresa não encontrada." });
+      return;
+    }
+    res.json({ empresa });
+  });
+
+  // Atualizar Ficha Cadastral da Empresa logada
+  app.put("/api/empresa/dados", requireAuth, async (req: AuthedRequest, res) => {
+    try {
+      const atualizada = await atualizarFichaEmpresa(req.usuario!.empresaId, req.body ?? {});
+      res.json({ ok: true, empresa: atualizada });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar dados da empresa." });
+    }
+  });
+
+  // Consulta e auto-preenchimento de dados de CNPJ via API pública
+  app.get("/api/cnpj/:cnpj", requireAuth, async (req: AuthedRequest, res) => {
+    const resultado = await consultarCnpj(String(req.params.cnpj));
+    if (!resultado.ok) {
+      res.status(400).json({ erro: resultado.erro });
+      return;
+    }
+    res.json(resultado.dados);
   });
 
   // ============================================================================

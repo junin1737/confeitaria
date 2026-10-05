@@ -407,6 +407,34 @@ export async function migrate() {
   await ensureColumn("tb_empresa", "motivo_bloqueio", "TEXT");
   await ensureColumn("tb_empresa", "slug", "TEXT");
 
+  // Ficha Cadastral Completa da Empresa (Conforme modelo fiscal/emissor)
+  await ensureColumn("tb_empresa", "razao_social", "TEXT");
+  await ensureColumn("tb_empresa", "nome_fantasia", "TEXT");
+  await ensureColumn("tb_empresa", "responsavel", "TEXT");
+  await ensureColumn("tb_empresa", "cnpj", "TEXT");
+  await ensureColumn("tb_empresa", "inscricao_estadual", "TEXT");
+  await ensureColumn("tb_empresa", "inscricao_municipal", "TEXT");
+  await ensureColumn("tb_empresa", "cep", "TEXT");
+  await ensureColumn("tb_empresa", "tipo_logradouro", "TEXT DEFAULT 'Rua'");
+  await ensureColumn("tb_empresa", "logradouro", "TEXT");
+  await ensureColumn("tb_empresa", "numero", "TEXT");
+  await ensureColumn("tb_empresa", "complemento", "TEXT");
+  await ensureColumn("tb_empresa", "bairro", "TEXT");
+  await ensureColumn("tb_empresa", "uf", "TEXT");
+  await ensureColumn("tb_empresa", "municipio", "TEXT");
+  await ensureColumn("tb_empresa", "ddd_telefone", "TEXT");
+  await ensureColumn("tb_empresa", "fax", "TEXT");
+  await ensureColumn("tb_empresa", "ddd_celular", "TEXT");
+  await ensureColumn("tb_empresa", "celular", "TEXT");
+  await ensureColumn("tb_empresa", "site", "TEXT");
+  await ensureColumn("tb_empresa", "ramo_atividade", "TEXT");
+  await ensureColumn("tb_empresa", "cnae", "TEXT");
+  await ensureColumn("tb_empresa", "suframa", "TEXT");
+  await ensureColumn("tb_empresa", "data_compra_sistema", "TEXT");
+  await ensureColumn("tb_empresa", "optante_simples", "TEXT DEFAULT 'Sim'");
+  await ensureColumn("tb_empresa", "regime_tributario", "TEXT DEFAULT 'Normal'");
+  await ensureColumn("tb_empresa", "logomarca_url", "TEXT");
+
   // Migrações incrementais na tabela de usuários
   await ensureColumn("tb_usuario", "email", "TEXT");
 

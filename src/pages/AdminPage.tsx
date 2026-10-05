@@ -30,6 +30,9 @@ import {
   ShieldCheck,
   Unlock,
   Users,
+  FileText,
+  X,
+  MapPin,
 } from "lucide-react";
 import {
   alterarStatusEmpresaApi,
@@ -46,6 +49,7 @@ export function AdminPage() {
   const [search, setSearch] = useState("");
   const [modalNova, setModalNova] = useState(false);
   const [modalBloqueio, setModalBloqueio] = useState<EmpresaAdminDto | null>(null);
+  const [modalFicha, setModalFicha] = useState<EmpresaAdminDto | null>(null);
   const [motivoBloqueio, setMotivoBloqueio] = useState("");
   const [copiadoSerial, setCopiadoSerial] = useState<string | null>(null);
   const [copiadoKey, setCopiadoKey] = useState(false);
@@ -440,7 +444,27 @@ export function AdminPage() {
                         Colaboradores: <strong>{emp.totalFuncionarios}</strong> | Usuários: <strong>{emp.totalUsuarios}</strong>
                       </div>
 
-                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                        <button
+                          onClick={() => setModalFicha(emp)}
+                          style={{
+                            background: "#e0f2fe",
+                            color: "#0369a1",
+                            border: "1px solid #bae6fd",
+                            borderRadius: "8px",
+                            padding: "6px 12px",
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "5px",
+                          }}
+                        >
+                          <FileText size={14} />
+                          Ver Ficha Cadastral
+                        </button>
+
                         <button
                           onClick={() => handleProrrogar(emp.id, 30)}
                           style={{
@@ -788,6 +812,149 @@ export function AdminPage() {
                 style={{ padding: "8px 16px", borderRadius: "8px", border: "none", background: "#c62828", color: "white", fontWeight: 700, fontSize: "13px", cursor: "pointer" }}
               >
                 Confirmar Bloqueio
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: VISUALIZAR FICHA CADASTRAL DA EMPRESA (USUÁRIO MASTER) */}
+      {modalFicha && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: "16px" }}>
+          <div style={{ background: "white", borderRadius: "16px", maxWidth: "800px", width: "100%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)", border: "1px solid #e2e8f0" }}>
+            {/* TOPO MODAL */}
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc", borderTopLeftRadius: "16px", borderTopRightRadius: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#e0f2fe", color: "#0369a1", display: "grid", placeItems: "center" }}>
+                  <Building2 size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: "16px", fontWeight: 800, margin: 0, color: "#1e293b" }}>
+                    Ficha Cadastral • {modalFicha.nome}
+                  </h3>
+                  <span style={{ fontSize: "12px", color: "#64748b" }}>
+                    Visualização exclusiva do Usuário Master (Dados Fiscais & Contato)
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setModalFicha(null)}
+                style={{ background: "transparent", border: "none", cursor: "pointer", color: "#94a3b8" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* CORPO MODAL */}
+            <div style={{ padding: "20px 24px" }}>
+              {/* DADOS PRINCIPAIS */}
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "14px", marginBottom: "14px" }}>
+                <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Razão Social</span>
+                  <div style={{ fontSize: "14px", fontWeight: 800, color: "#1e293b", marginTop: "2px" }}>
+                    {modalFicha.razaoSocial || modalFicha.nome}
+                  </div>
+                </div>
+                <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Nome Fantasia</span>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#1e293b", marginTop: "2px" }}>
+                    {modalFicha.nomeFantasia || modalFicha.nome}
+                  </div>
+                </div>
+              </div>
+
+              {/* CNPJ, IE, IM */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px", marginBottom: "14px" }}>
+                <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>CNPJ / CPF</span>
+                  <div style={{ fontSize: "13px", fontWeight: 800, color: "#0369a1", marginTop: "2px" }}>
+                    {modalFicha.cnpj || modalFicha.documento || "Não informado"}
+                  </div>
+                </div>
+                <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Inscrição Estadual (IE)</span>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#334155", marginTop: "2px" }}>
+                    {modalFicha.inscricaoEstadual || "Isento / Não inf."}
+                  </div>
+                </div>
+                <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Inscrição Municipal</span>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#334155", marginTop: "2px" }}>
+                    {modalFicha.inscricaoMunicipal || "Não informada"}
+                  </div>
+                </div>
+              </div>
+
+              {/* RESPONSÁVEL & CONTATOS */}
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: "14px", marginBottom: "14px" }}>
+                <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Responsável</span>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#334155", marginTop: "2px" }}>
+                    {modalFicha.responsavel || "Não informado"}
+                  </div>
+                </div>
+                <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Telefone / Celular</span>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#334155", marginTop: "2px" }}>
+                    {modalFicha.celular || modalFicha.telefone || "Não informado"}
+                  </div>
+                </div>
+                <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>E-mail</span>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#334155", marginTop: "2px" }}>
+                    {modalFicha.email || "Não informado"}
+                  </div>
+                </div>
+              </div>
+
+              {/* ENDEREÇO COMPLETO */}
+              <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "10px", border: "1px solid #e2e8f0", marginBottom: "14px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", display: "flex", alignItems: "center", gap: "4px" }}>
+                  <MapPin size={13} /> Endereço Completo
+                </span>
+                <div style={{ fontSize: "13px", color: "#1e293b", marginTop: "4px", lineHeight: "1.5" }}>
+                  {modalFicha.logradouro ? (
+                    <>
+                      <strong>{modalFicha.tipoLogradouro || "Rua"} {modalFicha.logradouro}</strong>, nº {modalFicha.numero || "S/N"} {modalFicha.complemento ? `(${modalFicha.complemento})` : ""}
+                      <br />
+                      Bairro: {modalFicha.bairro || "-"} • {modalFicha.municipio || "-"}/{modalFicha.uf || "-"} • CEP: {modalFicha.cep || "-"}
+                    </>
+                  ) : (
+                    <span style={{ color: "#94a3b8" }}>Endereço não cadastrado.</span>
+                  )}
+                </div>
+              </div>
+
+              {/* ATIVIDADE & TRIBUTAÇÃO */}
+              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", gap: "14px" }}>
+                <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Ramo / Atividade</span>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#334155", marginTop: "2px" }}>
+                    {modalFicha.ramoAtividade || "Não informado"} {modalFicha.cnae ? `(CNAE: ${modalFicha.cnae})` : ""}
+                  </div>
+                </div>
+                <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Optante Simples</span>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: modalFicha.optanteSimples === "Sim" ? "#16a34a" : "#dc2626", marginTop: "2px" }}>
+                    {modalFicha.optanteSimples || "Sim"}
+                  </div>
+                </div>
+                <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Regime Tributário</span>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#334155", marginTop: "2px" }}>
+                    {modalFicha.regimeTributario || "Normal"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* RODAPÉ MODAL */}
+            <div style={{ padding: "14px 20px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "flex-end", background: "#f8fafc", borderBottomLeftRadius: "16px", borderBottomRightRadius: "16px" }}>
+              <button
+                onClick={() => setModalFicha(null)}
+                style={{ padding: "8px 18px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "white", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+              >
+                Fechar Ficha
               </button>
             </div>
           </div>

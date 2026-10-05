@@ -369,6 +369,59 @@ export type EmpresaAdminDto = {
   totalVendas: number;
   diasRestantes: number | null;
   licencaValida: boolean;
+
+  // Ficha Cadastral Completa
+  razaoSocial?: string | null;
+  nomeFantasia?: string | null;
+  responsavel?: string | null;
+  cnpj?: string | null;
+  inscricaoEstadual?: string | null;
+  inscricaoMunicipal?: string | null;
+  cep?: string | null;
+  tipoLogradouro?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  uf?: string | null;
+  municipio?: string | null;
+  dddTelefone?: string | null;
+  fax?: string | null;
+  dddCelular?: string | null;
+  celular?: string | null;
+  site?: string | null;
+  ramoAtividade?: string | null;
+  cnae?: string | null;
+  suframa?: string | null;
+  dataCompraSistema?: string | null;
+  optanteSimples?: string | null;
+  regimeTributario?: string | null;
+  logomarcaUrl?: string | null;
+};
+
+export type CnpjConsultaDto = {
+  cnpj: string;
+  razaoSocial: string;
+  nomeFantasia: string;
+  responsavel: string;
+  cep: string;
+  tipoLogradouro: string;
+  logradouro: string;
+  numero: string;
+  complemento: string;
+  bairro: string;
+  uf: string;
+  municipio: string;
+  dddTelefone: string;
+  telefone: string;
+  dddCelular: string;
+  celular: string;
+  email: string;
+  ramoAtividade: string;
+  cnae: string;
+  inscricaoEstadual: string;
+  optanteSimples: "Sim" | "Não";
+  regimeTributario: "Normal" | "Microempreendedor Individual - MEI" | "Excedido o sublimite do estado";
 };
 
 export async function fetchAdminEmpresas() {
@@ -376,6 +429,37 @@ export async function fetchAdminEmpresas() {
   if (!response.ok) throw new Error("Não foi possível carregar as empresas.");
   const data = await readJson<{ empresas: EmpresaAdminDto[] }>(response);
   return data.empresas;
+}
+
+export async function fetchDadosEmpresa(): Promise<EmpresaAdminDto> {
+  const response = await fetch("/api/empresa/dados", { credentials: "include" });
+  if (!response.ok) throw new Error("Não foi possível carregar os dados cadastrais da empresa.");
+  const data = await readJson<{ empresa: EmpresaAdminDto }>(response);
+  return data.empresa;
+}
+
+export async function saveDadosEmpresa(dados: Partial<EmpresaAdminDto>): Promise<EmpresaAdminDto> {
+  const response = await fetch("/api/empresa/dados", {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ ok?: boolean; empresa?: EmpresaAdminDto; erro?: string }>(response);
+  if (!response.ok || !data.empresa) {
+    throw new Error(data.erro || "Não foi possível salvar os dados da empresa.");
+  }
+  return data.empresa;
+}
+
+export async function lookupCnpj(cnpj: string): Promise<CnpjConsultaDto> {
+  const digits = cnpj.replace(/\D/g, "");
+  const response = await fetch(`/api/cnpj/${digits}`, { credentials: "include" });
+  const data = await readJson<CnpjConsultaDto & { erro?: string }>(response);
+  if (!response.ok || (data as any).erro) {
+    throw new Error((data as any).erro || "Erro ao consultar CNPJ na base da Receita.");
+  }
+  return data;
 }
 
 export async function criarEmpresaAdminApi(dados: {

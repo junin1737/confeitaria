@@ -43,6 +43,34 @@ export type EmpresaAdmin = {
   totalVendas: number;
   diasRestantes: number | null;
   licencaValida: boolean;
+
+  // Ficha Cadastral Completa
+  razaoSocial?: string | null;
+  nomeFantasia?: string | null;
+  responsavel?: string | null;
+  cnpj?: string | null;
+  inscricaoEstadual?: string | null;
+  inscricaoMunicipal?: string | null;
+  cep?: string | null;
+  tipoLogradouro?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  uf?: string | null;
+  municipio?: string | null;
+  dddTelefone?: string | null;
+  fax?: string | null;
+  dddCelular?: string | null;
+  celular?: string | null;
+  site?: string | null;
+  ramoAtividade?: string | null;
+  cnae?: string | null;
+  suframa?: string | null;
+  dataCompraSistema?: string | null;
+  optanteSimples?: string | null;
+  regimeTributario?: string | null;
+  logomarcaUrl?: string | null;
 };
 
 /**
@@ -92,6 +120,12 @@ export async function listarEmpresasAdmin(): Promise<EmpresaAdmin[]> {
       e.id, e.nome, e.email, e.telefone, e.documento, e.status, 
       COALESCE(e.plano, 'trial') AS plano, 
       e.serial_key, e.expira_em, e.motivo_bloqueio, e.slug, e.criado_em,
+      e.razao_social, e.nome_fantasia, e.responsavel, e.cnpj,
+      e.inscricao_estadual, e.inscricao_municipal, e.cep, e.tipo_logradouro,
+      e.logradouro, e.numero, e.complemento, e.bairro, e.uf, e.municipio,
+      e.ddd_telefone, e.fax, e.ddd_celular, e.celular, e.site,
+      e.ramo_atividade, e.cnae, e.suframa, e.data_compra_sistema,
+      e.optante_simples, e.regime_tributario, e.logomarca_url,
       (SELECT COUNT(*) FROM tb_usuario u WHERE u.empresa_id = e.id) AS total_usuarios,
       (SELECT COUNT(*) FROM tb_funcionario f WHERE f.empresa_id = e.id) AS total_funcionarios,
       (SELECT COALESCE(SUM(v.valor), 0) FROM tb_venda_grupo v WHERE v.empresa_id = e.id) AS total_vendas
@@ -130,6 +164,33 @@ export async function listarEmpresasAdmin(): Promise<EmpresaAdmin[]> {
       totalVendas: Number(row.total_vendas),
       diasRestantes: dias,
       licencaValida,
+
+      razaoSocial: row.razao_social ? String(row.razao_social) : null,
+      nomeFantasia: row.nome_fantasia ? String(row.nome_fantasia) : null,
+      responsavel: row.responsavel ? String(row.responsavel) : null,
+      cnpj: row.cnpj ? String(row.cnpj) : (row.documento ? String(row.documento) : null),
+      inscricaoEstadual: row.inscricao_estadual ? String(row.inscricao_estadual) : null,
+      inscricaoMunicipal: row.inscricao_municipal ? String(row.inscricao_municipal) : null,
+      cep: row.cep ? String(row.cep) : null,
+      tipoLogradouro: row.tipo_logradouro ? String(row.tipo_logradouro) : "Rua",
+      logradouro: row.logradouro ? String(row.logradouro) : null,
+      numero: row.numero ? String(row.numero) : null,
+      complemento: row.complemento ? String(row.complemento) : null,
+      bairro: row.bairro ? String(row.bairro) : null,
+      uf: row.uf ? String(row.uf) : null,
+      municipio: row.municipio ? String(row.municipio) : null,
+      dddTelefone: row.ddd_telefone ? String(row.ddd_telefone) : null,
+      fax: row.fax ? String(row.fax) : null,
+      dddCelular: row.ddd_celular ? String(row.ddd_celular) : null,
+      celular: row.celular ? String(row.celular) : null,
+      site: row.site ? String(row.site) : null,
+      ramoAtividade: row.ramo_atividade ? String(row.ramo_atividade) : null,
+      cnae: row.cnae ? String(row.cnae) : null,
+      suframa: row.suframa ? String(row.suframa) : null,
+      dataCompraSistema: row.data_compra_sistema ? String(row.data_compra_sistema) : null,
+      optanteSimples: row.optante_simples ? String(row.optante_simples) : "Sim",
+      regimeTributario: row.regime_tributario ? String(row.regime_tributario) : "Normal",
+      logomarcaUrl: row.logomarca_url ? String(row.logomarca_url) : null,
     };
   });
 }
@@ -347,3 +408,83 @@ export async function verificarAcessoEmpresa(empresaId: number): Promise<{
 
   return { permitido: true, status };
 }
+
+/**
+ * [FUNÇÃO: atualizarFichaEmpresa]
+ * Atualiza todos os campos cadastrais e fiscais da empresa/emitente.
+ */
+export async function atualizarFichaEmpresa(
+  empresaId: number,
+  dados: Partial<EmpresaAdmin>
+) {
+  await db.execute({
+    sql: `UPDATE tb_empresa SET
+            nome = COALESCE(?, nome),
+            razao_social = ?,
+            nome_fantasia = ?,
+            responsavel = ?,
+            cnpj = ?,
+            documento = COALESCE(?, documento),
+            inscricao_estadual = ?,
+            inscricao_municipal = ?,
+            cep = ?,
+            tipo_logradouro = ?,
+            logradouro = ?,
+            numero = ?,
+            complemento = ?,
+            bairro = ?,
+            uf = ?,
+            municipio = ?,
+            ddd_telefone = ?,
+            telefone = ?,
+            fax = ?,
+            ddd_celular = ?,
+            celular = ?,
+            email = ?,
+            site = ?,
+            ramo_atividade = ?,
+            cnae = ?,
+            suframa = ?,
+            data_compra_sistema = ?,
+            optante_simples = ?,
+            regime_tributario = ?,
+            logomarca_url = ?
+          WHERE id = ?`,
+    args: [
+      dados.nomeFantasia || dados.razaoSocial || dados.nome || null,
+      dados.razaoSocial?.trim() || null,
+      dados.nomeFantasia?.trim() || null,
+      dados.responsavel?.trim() || null,
+      dados.cnpj?.trim() || null,
+      dados.cnpj?.trim() || null,
+      dados.inscricaoEstadual?.trim() || null,
+      dados.inscricaoMunicipal?.trim() || null,
+      dados.cep?.trim() || null,
+      dados.tipoLogradouro?.trim() || "Rua",
+      dados.logradouro?.trim() || null,
+      dados.numero?.trim() || null,
+      dados.complemento?.trim() || null,
+      dados.bairro?.trim() || null,
+      dados.uf?.trim() || null,
+      dados.municipio?.trim() || null,
+      dados.dddTelefone?.trim() || null,
+      dados.telefone?.trim() || null,
+      dados.fax?.trim() || null,
+      dados.dddCelular?.trim() || null,
+      dados.celular?.trim() || null,
+      dados.email?.trim() || null,
+      dados.site?.trim() || null,
+      dados.ramoAtividade?.trim() || null,
+      dados.cnae?.trim() || null,
+      dados.suframa?.trim() || null,
+      dados.dataCompraSistema?.trim() || null,
+      dados.optanteSimples || "Sim",
+      dados.regimeTributario || "Normal",
+      dados.logomarcaUrl || null,
+      empresaId,
+    ],
+  });
+
+  return obterEmpresaAdmin(empresaId);
+}
+
