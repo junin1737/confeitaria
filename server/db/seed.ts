@@ -78,11 +78,15 @@ export async function seed() {
   const empresa = await db.execute("SELECT id FROM tb_empresa LIMIT 1");
   if (empresa.rows[0]) {
     empresaId = Number(empresa.rows[0].id);
+    await db.execute({
+      sql: `UPDATE tb_empresa SET nome = 'Gestão com Sabor' WHERE id = ?`,
+      args: [empresaId],
+    });
   } else {
     const created = await db.execute({
       sql: `INSERT INTO tb_empresa (nome, status, plano, serial_key, criado_em) 
-            VALUES (?, 'ativa', 'vitalicio', 'DG-MESTRE-2026-VIP', ?)`,
-      args: ["Ateliê Açúcar & Afeto", NOW()],
+            VALUES (?, 'ativa', 'vitalicio', 'GCS-MESTRE-2026-VIP', ?)`,
+      args: ["Gestão com Sabor", NOW()],
     });
     empresaId = Number(created.lastInsertRowid);
   }
@@ -499,56 +503,45 @@ async function seedPrecificacao(empresaId: number) {
  * Cria subgrupos, fornecedores, clientes e cadastra produtos com ficha técnica integrada.
  */
 async function seedCadastrosPadrao(empresaId: number) {
-  // 0. TIPOS DE ITEM (Insumo, Embalagem, Acabado, Revenda, Semi-acabado)
-  const existingTipos = await db.execute({
-    sql: "SELECT COUNT(*) AS total FROM tb_tipo_item WHERE empresa_id = ?",
-    args: [empresaId],
-  });
+  // 0. TIPOS DE ITEM OFICIAIS (Conforme Norma Fiscal / SPED do usuário)
+  const TIPOS_OFICIAIS = [
+    { codigo: "0", nome: "Mercadoria para revenda", descricao: "Mercadoria adquirida para comercialização direta sem transformação.", exibirNfce: true, padrao: false },
+    { codigo: "1", nome: "Matéria-Prima", descricao: "Insumo básico utilizado diretamente no processo de produção de doces e salgados.", exibirNfce: true, padrao: false },
+    { codigo: "10", nome: "Outros Insumos", descricao: "Insumos secundários de apoio à produção e acabamento.", exibirNfce: true, padrao: false },
+    { codigo: "2", nome: "Embalagem", descricao: "Embalagens, cakeboards, forminhas, caixas com visor de transporte.", exibirNfce: true, padrao: false },
+    { codigo: "3", nome: "Produto em Processo", descricao: "Produto em fase de produção ou beneficiamento.", exibirNfce: true, padrao: false },
+    { codigo: "4", nome: "Produto Acabado", descricao: "Produto finalizado pronto para venda aos clientes (bolos, doces, kits).", exibirNfce: true, padrao: true },
+    { codigo: "5", nome: "Subproduto", descricao: "Item secundário resultante do processo produtivo.", exibirNfce: true, padrao: false },
+    { codigo: "6", nome: "Produto Intermediário", descricao: "Semi-acabados e recheios bases (brigadeiro de ponto de bico, massas base).", exibirNfce: true, padrao: false },
+    { codigo: "7", nome: "Material de Uso e Consumo", descricao: "Materiais para limpeza, escritório e consumo do estabelecimento.", exibirNfce: false, padrao: false },
+    { codigo: "8", nome: "Ativo Imobilizado", descricao: "Batedeiras, fornos, panelas mexedoras e equipamentos duráveis.", exibirNfce: true, padrao: false },
+    { codigo: "9", nome: "Serviços", descricao: "Serviços de entrega, aluguel de suportes de bolo, buffet.", exibirNfce: true, padrao: false },
+    { codigo: "99", nome: "Outras", descricao: "Outras classificações não contempladas anteriormente.", exibirNfce: true, padrao: false },
+  ];
 
   let tipoAcabadoId: number | undefined;
 
-  if (Number(existingTipos.rows[0]?.total ?? 0) === 0) {
-    const tAcabado = await salvarTipoItem(empresaId, {
-      nome: "Produto Acabado",
-      codigo: "PA",
-      descricao: "Itens finalizados para venda direta aos clientes (bolos, doces, kits).",
-      padrao: true,
-    });
-    if ("id" in tAcabado) tipoAcabadoId = tAcabado.id;
-
-    await salvarTipoItem(empresaId, {
-      nome: "Insumo / Matéria-prima",
-      codigo: "MP",
-      descricao: "Ingredientes que compõem a receita (leite condensado, farinha, cacau, etc.).",
-      padrao: false,
+  for (const t of TIPOS_OFICIAIS) {
+    const existing = await db.execute({
+      sql: "SELECT id FROM tb_tipo_item WHERE empresa_id = ? AND (codigo = ? OR nome = ?)",
+      args: [empresaId, t.codigo, t.nome],
     });
 
-    await salvarTipoItem(empresaId, {
-      nome: "Embalagem",
-      codigo: "EMB",
-      descricao: "Caixas, cakeboards, fitas e forminhas de acomodação.",
-      padrao: false,
-    });
-
-    await salvarTipoItem(empresaId, {
-      nome: "Mercadoria para Revenda",
-      codigo: "REV",
-      descricao: "Itens comprados prontos para comercialização (refrigerantes, velas, descartáveis).",
-      padrao: false,
-    });
-
-    await salvarTipoItem(empresaId, {
-      nome: "Semi-acabado / Recheio Base",
-      codigo: "SA",
-      descricao: "Bases produzidas internamente (brigadeiro de ponto de bico, geleias caseiras, massas).",
-      padrao: false,
-    });
-  } else {
-    const tipos = await db.execute({
-      sql: "SELECT id FROM tb_tipo_item WHERE empresa_id = ? AND nome = 'Produto Acabado'",
-      args: [empresaId],
-    });
-    if (tipos.rows[0]) tipoAcabadoId = Number(tipos.rows[0].id);
+    if (existing.rows[0]) {
+      if (t.padrao) tipoAcabadoId = Number(existing.rows[0].id);
+      await db.execute({
+        sql: "UPDATE tb_tipo_item SET codigo = ?, nome = ?, descricao = ?, padrao = ? WHERE id = ?",
+        args: [t.codigo, t.nome, t.descricao, t.padrao ? 1 : 0, Number(existing.rows[0].id)],
+      });
+    } else {
+      const created = await salvarTipoItem(empresaId, {
+        nome: t.nome,
+        codigo: t.codigo,
+        descricao: t.descricao,
+        padrao: t.padrao,
+      });
+      if ("id" in created && t.padrao) tipoAcabadoId = created.id;
+    }
   }
 
   // 1. SUBGRUPOS DE PRODUTOS

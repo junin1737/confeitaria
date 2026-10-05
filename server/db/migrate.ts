@@ -312,6 +312,63 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_tipo_item_empresa ON tb_tipo_item (empresa_id)`,
   `CREATE INDEX IF NOT EXISTS idx_produto_custo_hist_prod ON tb_produto_custo_historico (produto_id)`,
   `CREATE INDEX IF NOT EXISTS idx_produto_custo_hist_data ON tb_produto_custo_historico (data_hora)`,
+
+  // 23. Módulo de Produção: tb_producao (ordem de produção de produtos acabados)
+  `CREATE TABLE IF NOT EXISTS tb_producao (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    produto_id INTEGER NOT NULL REFERENCES tb_produto(id),
+    quantidade_produzida REAL NOT NULL DEFAULT 1,
+    custo_total REAL NOT NULL DEFAULT 0,
+    observacoes TEXT,
+    data_producao TEXT NOT NULL,
+    criado_em TEXT NOT NULL
+  )`,
+
+  // 24. Módulo de Produção: tb_producao_insumo (baixa detalhada de matéria-prima)
+  `CREATE TABLE IF NOT EXISTS tb_producao_insumo (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    producao_id INTEGER NOT NULL REFERENCES tb_producao(id) ON DELETE CASCADE,
+    insumo_id INTEGER NOT NULL REFERENCES tb_insumo(id),
+    quantidade_baixada REAL NOT NULL,
+    unidade TEXT NOT NULL,
+    custo_unitario REAL NOT NULL DEFAULT 0,
+    custo_total REAL NOT NULL DEFAULT 0
+  )`,
+
+  // 25. Módulo de Compras: tb_compra_nota (entrada de estoque por nota fiscal / XML)
+  `CREATE TABLE IF NOT EXISTS tb_compra_nota (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    fornecedor_id INTEGER REFERENCES tb_fornecedor(id),
+    numero_nota TEXT NOT NULL,
+    serie_nota TEXT,
+    chave_acesso TEXT,
+    data_emissao TEXT,
+    data_entrada TEXT NOT NULL,
+    valor_produtos REAL NOT NULL DEFAULT 0,
+    valor_frete REAL NOT NULL DEFAULT 0,
+    valor_total REAL NOT NULL DEFAULT 0,
+    observacoes TEXT,
+    arquivo_xml TEXT,
+    criado_em TEXT NOT NULL
+  )`,
+
+  // 26. Módulo de Compras: tb_compra_item (itens da nota que entram no estoque de insumos/produtos)
+  `CREATE TABLE IF NOT EXISTS tb_compra_item (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    compra_id INTEGER NOT NULL REFERENCES tb_compra_nota(id) ON DELETE CASCADE,
+    insumo_id INTEGER REFERENCES tb_insumo(id),
+    produto_id INTEGER REFERENCES tb_produto(id),
+    descricao TEXT NOT NULL,
+    unidade TEXT NOT NULL DEFAULT 'un',
+    quantidade REAL NOT NULL,
+    valor_unitario REAL NOT NULL,
+    valor_total REAL NOT NULL
+  )`,
+
+  `CREATE INDEX IF NOT EXISTS idx_producao_empresa ON tb_producao (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_compra_nota_empresa ON tb_compra_nota (empresa_id)`,
 ];
 
 /**

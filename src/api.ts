@@ -1022,4 +1022,152 @@ export async function deleteTipoItem(id: number): Promise<void> {
   if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao excluir tipo de item");
 }
 
+/**
+ * ============================================================================
+ * [MÓDULO: ORDENS DE PRODUÇÃO]
+ * ============================================================================
+ */
+
+export type OrdemProducao = {
+  id: number;
+  produtoId: number;
+  produtoNome: string;
+  produtoCodigo: string;
+  quantidadeProduzida: number;
+  custoTotal: number;
+  observacoes: string | null;
+  dataProducao: string;
+  criadoEm: string;
+  insumosBaixados: {
+    insumoId: number;
+    insumoNome: string;
+    quantidadeBaixada: number;
+    unidade: string;
+    custoTotal: number;
+  }[];
+};
+
+export async function fetchProducoes(): Promise<OrdemProducao[]> {
+  const res = await fetch("/api/producao", { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar histórico de produção");
+  const data = await readJson<{ producoes: OrdemProducao[] }>(res);
+  return data.producoes;
+}
+
+export async function executarProducao(
+  produtoId: number,
+  quantidade: number,
+  observacoes?: string
+): Promise<{ ok: boolean; producaoId?: number; erro?: string }> {
+  const res = await fetch("/api/producao/executar", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ produtoId, quantidade, observacoes }),
+  });
+  const data = await readJson<{ ok?: boolean; producaoId?: number; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao executar ordem de produção");
+  return { ok: true, producaoId: data.producaoId };
+}
+
+/**
+ * ============================================================================
+ * [MÓDULO: COMPRAS E ENTRADA DE NOTA FISCAL / XML]
+ * ============================================================================
+ */
+
+export type CompraItem = {
+  id?: number;
+  insumoId?: number | null;
+  produtoId?: number | null;
+  descricao: string;
+  unidade: string;
+  quantidade: number;
+  valorUnitario: number;
+  valorTotal: number;
+};
+
+export type CompraNota = {
+  id: number;
+  fornecedorId: number | null;
+  fornecedorNome?: string | null;
+  fornecedorFantasia?: string | null;
+  numeroNota: string;
+  serieNota: string | null;
+  chaveAcesso: string | null;
+  dataEmissao: string | null;
+  dataEntrada: string;
+  valorProdutos: number;
+  valorFrete: number;
+  valorTotal: number;
+  observacoes: string | null;
+  criadoEm: string;
+  itens: CompraItem[];
+};
+
+export type CompraNotaInput = {
+  fornecedorId?: number | null;
+  numeroNota: string;
+  serieNota?: string | null;
+  chaveAcesso?: string | null;
+  dataEmissao?: string | null;
+  dataEntrada?: string | null;
+  valorProdutos: number;
+  valorFrete?: number;
+  valorTotal: number;
+  observacoes?: string | null;
+  arquivoXml?: string | null;
+  itens: CompraItem[];
+};
+
+export type XmlNfeParsed = {
+  sucesso: boolean;
+  chaveAcesso?: string;
+  numeroNota?: string;
+  serieNota?: string;
+  dataEmissao?: string;
+  fornecedor?: {
+    cnpjCpf: string;
+    razaoSocial: string;
+    nomeFantasia: string;
+  };
+  valorProdutos?: number;
+  valorFrete?: number;
+  valorTotal?: number;
+  itens?: CompraItem[];
+  erro?: string;
+};
+
+export async function fetchCompras(): Promise<CompraNota[]> {
+  const res = await fetch("/api/compras", { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar notas fiscais de compra");
+  const data = await readJson<{ compras: CompraNota[] }>(res);
+  return data.compras;
+}
+
+export async function saveCompraNota(dados: CompraNotaInput): Promise<{ ok: boolean; compraId?: number }> {
+  const res = await fetch("/api/compras", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ ok?: boolean; compraId?: number; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao registrar entrada de nota fiscal");
+  return { ok: true, compraId: data.compraId };
+}
+
+export async function parseNfeXmlApi(xmlString: string): Promise<XmlNfeParsed> {
+  const res = await fetch("/api/compras/parse-xml", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ xml: xmlString }),
+  });
+  const data = await readJson<XmlNfeParsed>(res);
+  if (!res.ok || !data.sucesso) throw new Error(data.erro || "Erro ao processar arquivo XML da NF-e");
+  return data;
+}
+
+
 

@@ -363,7 +363,7 @@ export function DashboardPage({
   onNavigate: (page: PageKey) => void;
   userName: string;
 }) {
-  const [tab, setTab] = useState<DashTab>("hoje");
+  const [tab, setTab] = useState<DashTab>("geral");
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
   const [dia, setDia] = useState<ResumoPeriodo | null>(null);
@@ -485,11 +485,11 @@ export function DashboardPage({
 
       <div className="dash-tabs-row">
         <div className="dash-tabs">
-          <button className={tab === "hoje" ? "active" : ""} onClick={() => setTab("hoje")}>
-            <Cake size={14} /> Hoje
-          </button>
           <button className={tab === "geral" ? "active" : ""} onClick={() => setTab("geral")}>
             <LayoutDashboard size={14} /> Resumo geral
+          </button>
+          <button className={tab === "hoje" ? "active" : ""} onClick={() => setTab("hoje")}>
+            <Cake size={14} /> Hoje & Aniversários
           </button>
           <button
             className={tab === "periodo" ? "active" : ""}

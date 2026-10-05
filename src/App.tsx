@@ -49,6 +49,8 @@ import { ProductsPage } from "./pages/ProductsPage";
 import { StockPage } from "./pages/StockPage";
 import { CustomersPage } from "./pages/CustomersPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
+import { ProductionPage } from "./pages/ProductionPage";
+import { PurchasesPage } from "./pages/PurchasesPage";
 import { fetchMe, iniciais, logoutRequest, type UsuarioSessao } from "./api";
 import { LoginPage } from "./pages/LoginPage";
 import { applyTheme, loadSavedTheme, saveTheme, type ThemeColors } from "./theme";
@@ -147,8 +149,8 @@ export default function App() {
             <Cake size={19} strokeWidth={2.4} />
           </div>
           <div>
-            <strong>Doce Gestor</strong>
-            <span>gestão sem complicação</span>
+            <strong>Gestão com Sabor</strong>
+            <span>gestão inteligente</span>
           </div>
           <button className="icon-button mobile-close" onClick={() => setMenuOpen(false)} aria-label="Fechar menu">
             <X size={18} />
@@ -272,9 +274,9 @@ export default function App() {
           {page === "dashboard" ? (
             <DashboardPage onAction={notify} onNavigate={(next) => goTo(next)} userName={firstName} />
           ) : null}
-          {page === "catalogo" || page === "producao" ? (
-            <ProductsPage onAction={notify} />
-          ) : null}
+          {page === "catalogo" ? <ProductsPage onAction={notify} /> : null}
+          {page === "producao" ? <ProductionPage onAction={notify} /> : null}
+          {page === "compras" ? <PurchasesPage onAction={notify} /> : null}
           {page === "estoque" ? <StockPage onAction={notify} /> : null}
           {page === "clientes" ? <CustomersPage onAction={notify} /> : null}
           {page === "fornecedores" ? <SuppliersPage onAction={notify} /> : null}
@@ -288,6 +290,7 @@ export default function App() {
           page !== "admin" &&
           page !== "catalogo" &&
           page !== "producao" &&
+          page !== "compras" &&
           page !== "estoque" &&
           page !== "clientes" &&
           page !== "fornecedores" ? (

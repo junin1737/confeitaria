@@ -95,10 +95,10 @@ export function StockPage({ onAction }: { onAction: (msg: string) => void }) {
     setFormCategoria("ingrediente");
     setFormMarca("");
     setFormFornecedorId(null);
-    setFormUnidadeCompra("g");
-    setFormUnidadeMedida("g");
-    setFormQtdEmbalagem(1000);
-    setFormPrecoCompra(10);
+    setFormUnidadeCompra("un");
+    setFormUnidadeMedida("un");
+    setFormQtdEmbalagem(0);
+    setFormPrecoCompra(0);
     setFormEstoqueAtual(0);
     setFormEstoqueMinimo(0);
     setFormError("");
@@ -346,6 +346,20 @@ export function StockPage({ onAction }: { onAction: (msg: string) => void }) {
                 </div>
 
                 <div className="detail-actions">
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => {
+                      if (insumos.length > 0) {
+                        selecionarInsumo(insumos[0]);
+                      } else {
+                        setSelectedId(null);
+                      }
+                      setFormError("");
+                    }}
+                  >
+                    Cancelar
+                  </button>
                   {selectedId !== "new" && selectedId != null ? (
                     <button
                       type="button"
@@ -528,6 +542,32 @@ export function StockPage({ onAction }: { onAction: (msg: string) => void }) {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* BARRA DE AÇÕES INFERIOR: CANCELAR E SALVAR */}
+              <div className="form-actions-bar" style={{ marginTop: "24px" }}>
+                <button
+                  type="button"
+                  className="button secondary"
+                  onClick={() => {
+                    if (insumos.length > 0) {
+                      selecionarInsumo(insumos[0]);
+                    } else {
+                      setSelectedId(null);
+                    }
+                    setFormError("");
+                  }}
+                  disabled={saving}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="button primary"
+                  disabled={saving}
+                >
+                  <Check size={16} /> {saving ? "Salvando..." : "Salvar insumo"}
+                </button>
               </div>
             </form>
           )}

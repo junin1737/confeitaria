@@ -78,6 +78,8 @@ import {
   excluirTipoItem,
   listarHistoricoCustoProduto,
 } from "./cadastros";
+import { executarProducao, listarProducoes } from "./producao";
+import { listarCompras, parseNfeXml, registrarEntradaNota } from "./compras";
 import { migrate } from "./db/migrate";
 import { seed } from "./db/seed";
 
@@ -975,6 +977,70 @@ async function start() {
       res.json(result);
     } catch (e: any) {
       res.status(500).json({ erro: e?.message || "Erro ao excluir tipo de item" });
+    }
+  });
+
+  // ============================================================================
+  // MÓDULO: PRODUÇÃO (ORDENS DE PRODUÇÃO, BAIXA DE MATÉRIA-PRIMA E ENTRADA DE ACABADO)
+  // ============================================================================
+  app.get("/api/producao", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const lista = await listarProducoes(req.usuario!.empresaId);
+      res.json({ producoes: lista });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar ordens de produção" });
+    }
+  });
+
+  app.post("/api/producao/executar", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await executarProducao(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao executar ordem de produção" });
+    }
+  });
+
+  // ============================================================================
+  // MÓDULO: COMPRAS & ENTRADA DE ESTOQUE (NOTA FISCAL & IMPORTAÇÃO XML)
+  // ============================================================================
+  app.get("/api/compras", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const lista = await listarCompras(req.usuario!.empresaId);
+      res.json({ compras: lista });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar notas fiscais de compras" });
+    }
+  });
+
+  app.post("/api/compras", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await registrarEntradaNota(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao registrar entrada de nota" });
+    }
+  });
+
+  app.post("/api/compras/parse-xml", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const xmlString = String(req.body?.xmlContent ?? "");
+      if (!xmlString) {
+        res.status(400).json({ erro: "Conteúdo XML não fornecido." });
+        return;
+      }
+      const parsed = parseNfeXml(xmlString);
+      res.json(parsed);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao processar XML de nota fiscal" });
     }
   });
 

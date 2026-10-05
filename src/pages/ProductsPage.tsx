@@ -231,10 +231,10 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     setFormTemReceita(true);
     setFormRendimentoQtd(1);
     setFormRendimentoUnidade("unidade");
-    setFormTempoPreparoMinutos(60);
-    setFormCustoHoraTrabalho(20);
-    setFormPercentualCustosFixos(15);
-    setFormMargemLucroDesejada(100);
+    setFormTempoPreparoMinutos(0);
+    setFormCustoHoraTrabalho(0);
+    setFormPercentualCustosFixos(0);
+    setFormMargemLucroDesejada(0);
     setFormModoPreparo("");
     setFormItensReceita([]);
     setHistoricoCusto([]);

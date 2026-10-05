@@ -83,8 +83,8 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
             <Cake size={18} strokeWidth={2.4} />
           </div>
           <div>
-            <strong>Doce Gestor</strong>
-            <span>gestão sem complicação</span>
+            <strong>Gestão com Sabor</strong>
+            <span>gestão inteligente</span>
           </div>
         </div>
         <div className="login-hero-copy">
@@ -96,7 +96,7 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
             <em> Mais clareza para crescer.</em>
           </h1>
           <p>
-            Organize pedidos, produção, estoque e financeiro em um só lugar — do jeitinho que o seu
+            Organize pedidos, produção, estoque e compras em um só lugar — do jeitinho que o seu
             negócio precisa.
           </p>
         </div>
@@ -106,7 +106,7 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
         </div>
         <blockquote>O seu talento merece uma gestão tão cuidadosa quanto o seu trabalho.</blockquote>
         <div className="login-hero-foot">
-          <small>© {new Date().getFullYear()} Doce Gestor</small>
+          <small>© {new Date().getFullYear()} Gestão com Sabor</small>
           <small>
             <ShieldCheck size={12} /> seus dados estão protegidos
           </small>
