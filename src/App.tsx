@@ -72,7 +72,7 @@ const ICONS = {
 function pageLabel(page: PageKey) {
   if (page === "dashboard") return "Visão geral";
   if (page === "admin") return "Painel Master (Admin)";
-  if (page === "configuracoes") return "Configurações";
+  if (page === "configuracoes") return "Parâmetros do Sistema";
   for (const group of NAV_GROUPS) {
     for (const item of group.items) {
       if (item.key === page) return item.label;
@@ -206,7 +206,7 @@ export default function App() {
               onClick={() => goTo("configuracoes")}
             >
               <Settings size={17} />
-              <span>Configurações</span>
+              <span>Parâmetros</span>
             </button>
             <button className="nav-item" onClick={() => notify("Central de ajuda aberta em breve")}>
               <CircleHelp size={17} />

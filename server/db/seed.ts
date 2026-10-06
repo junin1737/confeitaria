@@ -112,17 +112,8 @@ export async function seed() {
     });
   }
 
-  // 4. CATEGORIAS DE CONFEITARIA E HISTÓRICO DE VENDAS
-  await seedVendas(empresaId);
-
-  // 5. TEMPLATES DE MENSAGENS E ANIVERSÁRIOS
-  await garantirMensagens(empresaId);
-
-  // 6. INSUMOS, FICHAS TÉCNICAS E PRECIFICAÇÃO
-  await seedPrecificacao(empresaId);
-
-  // 7. CADASTROS PADRÃO (SUBGRUPOS, FORNECEDORES, CLIENTES, PRODUTOS C/ RECEITA)
-  await seedCadastrosPadrao(empresaId);
+  // 4. TIPOS DE ITENS OFICIAIS (Conforme Norma Fiscal / SPED)
+  await seedTiposItemPadrao(empresaId);
 }
 
 /**
@@ -499,11 +490,10 @@ async function seedPrecificacao(empresaId: number) {
 }
 
 /**
- * [BLOCO: SEED DE CADASTROS PADRÃO DA FASE 1]
- * Cria subgrupos, fornecedores, clientes e cadastra produtos com ficha técnica integrada.
+ * [BLOCO: SEED DE TIPOS DE ITENS OFICIAIS]
+ * Cria ou atualiza os 12 tipos de itens padronizados conforme norma fiscal/SPED.
  */
-async function seedCadastrosPadrao(empresaId: number) {
-  // 0. TIPOS DE ITEM OFICIAIS (Conforme Norma Fiscal / SPED do usuário)
+export async function seedTiposItemPadrao(empresaId: number) {
   const TIPOS_OFICIAIS = [
     { codigo: "0", nome: "Mercadoria para revenda", descricao: "Mercadoria adquirida para comercialização direta sem transformação.", exibirNfce: true, padrao: false },
     { codigo: "1", nome: "Matéria-Prima", descricao: "Insumo básico utilizado diretamente no processo de produção de doces e salgados.", exibirNfce: true, padrao: false },
@@ -519,8 +509,6 @@ async function seedCadastrosPadrao(empresaId: number) {
     { codigo: "99", nome: "Outras", descricao: "Outras classificações não contempladas anteriormente.", exibirNfce: true, padrao: false },
   ];
 
-  let tipoAcabadoId: number | undefined;
-
   for (const t of TIPOS_OFICIAIS) {
     const existing = await db.execute({
       sql: "SELECT id FROM tb_tipo_item WHERE empresa_id = ? AND (codigo = ? OR nome = ?)",
@@ -528,21 +516,34 @@ async function seedCadastrosPadrao(empresaId: number) {
     });
 
     if (existing.rows[0]) {
-      if (t.padrao) tipoAcabadoId = Number(existing.rows[0].id);
       await db.execute({
         sql: "UPDATE tb_tipo_item SET codigo = ?, nome = ?, descricao = ?, padrao = ? WHERE id = ?",
         args: [t.codigo, t.nome, t.descricao, t.padrao ? 1 : 0, Number(existing.rows[0].id)],
       });
     } else {
-      const created = await salvarTipoItem(empresaId, {
+      await salvarTipoItem(empresaId, {
         nome: t.nome,
         codigo: t.codigo,
         descricao: t.descricao,
         padrao: t.padrao,
       });
-      if ("id" in created && t.padrao) tipoAcabadoId = created.id;
     }
   }
+}
+
+/**
+ * [BLOCO: SEED DE CADASTROS PADRÃO DA FASE 1]
+ * Cria subgrupos, fornecedores, clientes e cadastra produtos com ficha técnica integrada.
+ */
+async function seedCadastrosPadrao(empresaId: number) {
+  // 0. TIPOS DE ITEM OFICIAIS (Conforme Norma Fiscal / SPED do usuário)
+  await seedTiposItemPadrao(empresaId);
+  const tipoAcabadoRes = await db.execute({
+    sql: "SELECT id FROM tb_tipo_item WHERE empresa_id = ? AND padrao = 1 LIMIT 1",
+    args: [empresaId],
+  });
+  const tipoAcabadoId = tipoAcabadoRes.rows[0] ? Number(tipoAcabadoRes.rows[0].id) : undefined;
+
 
   // 1. SUBGRUPOS DE PRODUTOS
   const grupos = await db.execute({

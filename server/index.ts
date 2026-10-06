@@ -85,7 +85,13 @@ import { listarCompras, parseNfeXml, registrarEntradaNota } from "./compras";
 import { migrate } from "./db/migrate";
 import { seed } from "./db/seed";
 
-const PORT = 5181;
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const PORT = process.env.PORT ? Number(process.env.PORT) : 5181;
 const COOKIE = "dg_sid";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "dg_master_secret_key_2026";
 
@@ -1090,10 +1096,27 @@ async function start() {
     }
   });
 
+  // ============================================================================
+  // PRODUÇÃO: SERVIR ARQUIVOS ESTÁTICOS DO VITE (SPA FALLBACK)
+  // ============================================================================
+  const distPath = path.resolve(__dirname, "../dist");
+  app.use(express.static(distPath));
+
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/")) {
+      return next();
+    }
+    res.sendFile(path.join(distPath, "index.html"), (err) => {
+      if (err) {
+        next();
+      }
+    });
+  });
+
   // Inicialização do servidor HTTP
-  app.listen(PORT, () => {
-    console.log(`API local Doce Gestor em http://localhost:${PORT}`);
-    console.log(`[Segurança] Chave Mestre de Integração API: ${ADMIN_API_KEY}`);
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`API Doce Gestor em execução na porta ${PORT}`);
+    console.log(`[Segurança] Chave Mestre de Integração API configurada.`);
   });
 }
 

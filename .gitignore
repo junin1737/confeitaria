@@ -6,3 +6,6 @@ dist-ssr
 .vite
 data/*.db
 data/*.db-*
+.env
+.env.*
+*.env
