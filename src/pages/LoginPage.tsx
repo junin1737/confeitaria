@@ -103,37 +103,51 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
     <div className="login-split">
       <aside className="login-hero">
         <div className="login-hero-brand">
-          <div className="brand-mark">
-            <Cake size={18} strokeWidth={2.4} />
+          <div className="brand-mark-sabor">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2L2 19.7778H22L12 2ZM12 6.22222L17.5556 16.4444H6.44444L12 6.22222Z" opacity="0.9" />
+              <path d="M12 9L7.5 17H16.5L12 9Z" />
+            </svg>
           </div>
-          <div>
-            <strong>Gestão com Sabor</strong>
-            <span>gestão inteligente</span>
-          </div>
+          <strong className="brand-title-sabor">Gestão com Sabor</strong>
         </div>
+
         <div className="login-hero-copy">
-          <div className="eyebrow">
-            <span className="eyebrow-dot" /> seu ateliê, no controle
+          <div className="eyebrow-sabor">
+            <span className="eyebrow-line" /> SEU NEGÓCIO NO CONTROLE
           </div>
-          <h1>
-            Mais tempo para criar.
-            <em> Mais clareza para crescer.</em>
+          <h1 className="login-hero-title">
+            Mais tempo para criar.<br />
+            Mais clareza para crescer.
           </h1>
-          <p>
-            Organize pedidos, produção, estoque e compras em um só lugar — do jeitinho que o seu
-            negócio precisa.
+          <p className="login-hero-subtitle">
+            Organize pedidos, produção, estoque e compras em um só lugar<br className="hide-mobile" />
+            — do jeitinho que o seu negócio precisa.
           </p>
         </div>
-        <div className="login-hero-photo">
-          <img src="/login-hero.png" alt="Seleção de bolos, doces e tartes do ateliê" />
-          <span>Feito para encantar cada detalhe importa</span>
+
+        {/* Três fotos representativas do negócio culinário / confeitaria / pizzaria */}
+        <div className="login-hero-gallery">
+          <div className="gallery-card">
+            <img src="/login-card-pizza.jpg" alt="Pizzaria e forno a lenha" />
+          </div>
+          <div className="gallery-card">
+            <img src="/login-card-salgados.jpg" alt="Salgados e pães artesanais" />
+          </div>
+          <div className="gallery-card">
+            <img src="/login-card-confeitaria.jpg" alt="Bolos decorados e confeitaria fina" />
+          </div>
         </div>
-        <blockquote>O seu talento merece uma gestão tão cuidadosa quanto o seu trabalho.</blockquote>
-        <div className="login-hero-foot">
-          <small>© {new Date().getFullYear()} Gestão com Sabor</small>
-          <small>
-            <ShieldCheck size={12} /> seus dados estão protegidos
-          </small>
+
+        {/* Badge pílula centralizada */}
+        <div className="login-hero-badge-wrap">
+          <span className="login-pill-badge">
+            Da receita à entrega: controle total
+          </span>
+        </div>
+
+        <div className="login-hero-quote-block">
+          <blockquote>O seu talento merece uma gestão tão cuidadosa quanto o seu trabalho.</blockquote>
         </div>
       </aside>
 
@@ -141,17 +155,17 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
         <form className="login-form" onSubmit={handleSubmit}>
           {modo === "login" ? (
             <>
-              <div className="eyebrow">Bem-vinda de volta</div>
+              <div className="login-form-eyebrow">BEM-VINDO DE VOLTA</div>
               <h2>Acesse sua conta</h2>
-              <p>Entre para acompanhar o seu ateliê.</p>
+              <p>Entre para gerenciar sua produção e vendas.</p>
             </>
           ) : (
             <>
               <div className="eyebrow" style={{ color: "var(--color-primary, #b33951)" }}>
                 ✨ Teste Grátis de 15 Dias
               </div>
-              <h2>Cadastre seu Ateliê</h2>
-              <p>Crie sua conta para gerenciar receitas e encomendas.</p>
+              <h2>Cadastre seu Negócio</h2>
+              <p>Crie sua conta para gerenciar receitas, produção e vendas.</p>
             </>
           )}
 
