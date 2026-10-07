@@ -78,6 +78,9 @@ import {
   listarTiposItem,
   salvarTipoItem,
   excluirTipoItem,
+  listarUnidadesMedida,
+  salvarUnidadeMedida,
+  excluirUnidadeMedida,
   listarHistoricoCustoProduto,
 } from "./cadastros";
 import { executarProducao, listarProducoes } from "./producao";
@@ -1029,6 +1032,43 @@ async function start() {
       res.json(result);
     } catch (e: any) {
       res.status(500).json({ erro: e?.message || "Erro ao excluir tipo de item" });
+    }
+  });
+
+  // ============================================================================
+  // MÓDULO: UNIDADES DE MEDIDA (UN, KG, CX, PCT, ETC.)
+  // ============================================================================
+  app.get("/api/unidades-medida", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      res.json({ unidades: await listarUnidadesMedida(req.usuario!.empresaId) });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar unidades de medida" });
+    }
+  });
+
+  app.post("/api/unidades-medida", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await salvarUnidadeMedida(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json({ unidade: result });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar unidade de medida" });
+    }
+  });
+
+  app.delete("/api/unidades-medida/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await excluirUnidadeMedida(req.usuario!.empresaId, Number(req.params.id));
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao excluir unidade de medida" });
     }
   });
 

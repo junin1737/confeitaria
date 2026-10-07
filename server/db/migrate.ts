@@ -367,8 +367,21 @@ const STATEMENTS = [
     valor_total REAL NOT NULL
   )`,
 
+  // 27. Cadastro de Unidades de Medida (para produtos, insumos e vendas)
+  `CREATE TABLE IF NOT EXISTS tb_unidade_medida (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    sigla TEXT NOT NULL,
+    nome TEXT NOT NULL,
+    permite_decimal INTEGER NOT NULL DEFAULT 0,
+    padrao INTEGER NOT NULL DEFAULT 0,
+    criado_em TEXT NOT NULL,
+    UNIQUE (empresa_id, sigla)
+  )`,
+
   `CREATE INDEX IF NOT EXISTS idx_producao_empresa ON tb_producao (empresa_id)`,
   `CREATE INDEX IF NOT EXISTS idx_compra_nota_empresa ON tb_compra_nota (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_unidade_medida_empresa ON tb_unidade_medida (empresa_id)`,
 ];
 
 /**

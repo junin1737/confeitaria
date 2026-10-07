@@ -1110,6 +1110,52 @@ export async function deleteTipoItem(id: number): Promise<void> {
 
 /**
  * ============================================================================
+ * [MÓDULO: UNIDADES DE MEDIDA]
+ * ============================================================================
+ */
+
+export type UnidadeMedida = {
+  id: number;
+  sigla: string;
+  nome: string;
+  permiteDecimal: boolean;
+  padrao: boolean;
+  totalProdutos?: number;
+};
+
+export async function fetchUnidadesMedida(): Promise<UnidadeMedida[]> {
+  const res = await fetch("/api/unidades-medida", { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar unidades de medida");
+  const data = await readJson<{ unidades: UnidadeMedida[] }>(res);
+  return data.unidades;
+}
+
+export async function saveUnidadeMedida(dados: {
+  id?: number;
+  sigla: string;
+  nome: string;
+  permiteDecimal?: boolean;
+  padrao?: boolean;
+}): Promise<UnidadeMedida> {
+  const res = await fetch("/api/unidades-medida", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ unidade?: UnidadeMedida; erro?: string }>(res);
+  if (!res.ok || !data.unidade) throw new Error(data.erro || "Erro ao salvar unidade de medida");
+  return data.unidade;
+}
+
+export async function deleteUnidadeMedida(id: number): Promise<void> {
+  const res = await fetch(`/api/unidades-medida/${id}`, { method: "DELETE", credentials: "include" });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao excluir unidade de medida");
+}
+
+/**
+ * ============================================================================
  * [MÓDULO: ORDENS DE PRODUÇÃO]
  * ============================================================================
  */

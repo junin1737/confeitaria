@@ -19,7 +19,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./client";
 import { garantirMensagens } from "../mensagens";
 import { salvarInsumo, salvarReceita } from "../precificacao";
-import { salvarCliente, salvarFornecedor, salvarProduto, salvarSubgrupo, salvarTipoItem } from "../cadastros";
+import { salvarCliente, salvarFornecedor, salvarProduto, salvarSubgrupo, salvarTipoItem, salvarUnidadeMedida } from "../cadastros";
 
 const NOW = () => new Date().toISOString();
 
@@ -532,12 +532,43 @@ export async function seedTiposItemPadrao(empresaId: number) {
 }
 
 /**
+ * [BLOCO: SEED DE UNIDADES DE MEDIDA PADRONIZADAS]
+ * Popula unidades comuns como UN, KG, G, CENTO, CX, FATIA, L, ML.
+ */
+export async function seedUnidadesMedidaPadrao(empresaId: number) {
+  const UNIDADES_PADRAO = [
+    { sigla: "UN", nome: "Unidade", permiteDecimal: false, padrao: true },
+    { sigla: "KG", nome: "Quilo / Quilograma", permiteDecimal: true, padrao: false },
+    { sigla: "G", nome: "Grama", permiteDecimal: true, padrao: false },
+    { sigla: "CENTO", nome: "Cento (100 unidades)", permiteDecimal: false, padrao: false },
+    { sigla: "CX", nome: "Caixa / Kit", permiteDecimal: false, padrao: false },
+    { sigla: "FATIA", nome: "Fatia / Pedaço", permiteDecimal: false, padrao: false },
+    { sigla: "L", nome: "Litro", permiteDecimal: true, padrao: false },
+    { sigla: "ML", nome: "Mililitro", permiteDecimal: true, padrao: false },
+    { sigla: "PCT", nome: "Pacote", permiteDecimal: false, padrao: false },
+  ];
+
+  for (const u of UNIDADES_PADRAO) {
+    const existing = await db.execute({
+      sql: "SELECT id FROM tb_unidade_medida WHERE empresa_id = ? AND sigla = ?",
+      args: [empresaId, u.sigla],
+    });
+
+    if (!existing.rows[0]) {
+      await salvarUnidadeMedida(empresaId, u);
+    }
+  }
+}
+
+/**
  * [BLOCO: SEED DE CADASTROS PADRÃO DA FASE 1]
  * Cria subgrupos, fornecedores, clientes e cadastra produtos com ficha técnica integrada.
  */
 async function seedCadastrosPadrao(empresaId: number) {
   // 0. TIPOS DE ITEM OFICIAIS (Conforme Norma Fiscal / SPED do usuário)
   await seedTiposItemPadrao(empresaId);
+  // 0.1 UNIDADES DE MEDIDA PADRÃO
+  await seedUnidadesMedidaPadrao(empresaId);
   const tipoAcabadoRes = await db.execute({
     sql: "SELECT id FROM tb_tipo_item WHERE empresa_id = ? AND padrao = 1 LIMIT 1",
     args: [empresaId],

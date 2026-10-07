@@ -257,6 +257,112 @@ export async function excluirTipoItem(empresaId: number, id: number) {
 
 /**
  * ============================================================================
+ * [MÓDULO: UNIDADES DE MEDIDA]
+ * ============================================================================
+ */
+
+export type UnidadeMedida = {
+  id: number;
+  sigla: string;
+  nome: string;
+  permiteDecimal: boolean;
+  padrao: boolean;
+  totalProdutos?: number;
+};
+
+export async function listarUnidadesMedida(empresaId: number): Promise<UnidadeMedida[]> {
+  const result = await db.execute({
+    sql: `SELECT u.id, u.sigla, u.nome, u.permite_decimal, u.padrao,
+                 (SELECT COUNT(*) FROM tb_produto p WHERE p.empresa_id = u.empresa_id AND (LOWER(p.unidade_venda) = LOWER(u.sigla) OR LOWER(p.unidade_venda) = LOWER(u.nome))) AS total_produtos
+          FROM tb_unidade_medida u
+          WHERE u.empresa_id = ?
+          ORDER BY u.padrao DESC, u.sigla ASC`,
+    args: [empresaId],
+  });
+
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    sigla: String(row.sigla),
+    nome: String(row.nome),
+    permiteDecimal: Boolean(row.permite_decimal),
+    padrao: Boolean(row.padrao),
+    totalProdutos: Number(row.total_produtos ?? 0),
+  }));
+}
+
+export async function salvarUnidadeMedida(
+  empresaId: number,
+  dados: { id?: number; sigla: string; nome: string; permiteDecimal?: boolean; padrao?: boolean }
+) {
+  const sigla = dados.sigla.trim().toUpperCase();
+  const nome = dados.nome.trim();
+  if (!sigla) return { erro: "Informe a sigla da unidade de medida (ex: UN, KG, CX)." };
+  if (!nome) return { erro: "Informe o nome descritivo da unidade (ex: Unidade, Quilo)." };
+
+  if (dados.padrao) {
+    // Se marcou como padrão, remove padrão das outras
+    await db.execute({
+      sql: "UPDATE tb_unidade_medida SET padrao = 0 WHERE empresa_id = ?",
+      args: [empresaId],
+    });
+  }
+
+  if (dados.id) {
+    await db.execute({
+      sql: `UPDATE tb_unidade_medida 
+            SET sigla = ?, nome = ?, permite_decimal = ?, padrao = ?
+            WHERE empresa_id = ? AND id = ?`,
+      args: [sigla, nome, dados.permiteDecimal ? 1 : 0, dados.padrao ? 1 : 0, empresaId, dados.id],
+    });
+    return { id: dados.id, sigla, nome, permiteDecimal: Boolean(dados.permiteDecimal), padrao: Boolean(dados.padrao) };
+  }
+
+  // Verifica se sigla já existe
+  const jaExiste = await db.execute({
+    sql: "SELECT id FROM tb_unidade_medida WHERE empresa_id = ? AND sigla = ?",
+    args: [empresaId, sigla],
+  });
+  if (jaExiste.rows.length > 0) {
+    return { erro: `A sigla "${sigla}" já está cadastrada nesta empresa.` };
+  }
+
+  const created = await db.execute({
+    sql: `INSERT INTO tb_unidade_medida (empresa_id, sigla, nome, permite_decimal, padrao, criado_em)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [empresaId, sigla, nome, dados.permiteDecimal ? 1 : 0, dados.padrao ? 1 : 0, NOW()],
+  });
+
+  return { id: Number(created.lastInsertRowid), sigla, nome, permiteDecimal: Boolean(dados.permiteDecimal), padrao: Boolean(dados.padrao) };
+}
+
+export async function excluirUnidadeMedida(empresaId: number, id: number) {
+  const item = await db.execute({
+    sql: "SELECT sigla, nome FROM tb_unidade_medida WHERE empresa_id = ? AND id = ?",
+    args: [empresaId, id],
+  });
+  if (!item.rows[0]) return { erro: "Unidade de medida não encontrada." };
+
+  const sigla = String(item.rows[0].sigla);
+  const nome = String(item.rows[0].nome);
+
+  const vinculados = await db.execute({
+    sql: "SELECT COUNT(*) AS total FROM tb_produto WHERE empresa_id = ? AND (LOWER(unidade_venda) = LOWER(?) OR LOWER(unidade_venda) = LOWER(?))",
+    args: [empresaId, sigla, nome],
+  });
+
+  if (Number(vinculados.rows[0]?.total ?? 0) > 0) {
+    return { erro: `Não é possível excluir esta unidade pois existem ${vinculados.rows[0]?.total} produto(s) vinculados a ela.` };
+  }
+
+  await db.execute({
+    sql: "DELETE FROM tb_unidade_medida WHERE empresa_id = ? AND id = ?",
+    args: [empresaId, id],
+  });
+  return { ok: true };
+}
+
+/**
+ * ============================================================================
  * [MÓDULO: FORNECEDORES]
  * ============================================================================
  */

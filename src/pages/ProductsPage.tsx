@@ -48,6 +48,9 @@ import {
   deleteGrupo,
   deleteSubgrupo,
   deleteTipoItem,
+  fetchUnidadesMedida,
+  saveUnidadeMedida,
+  deleteUnidadeMedida,
   type GrupoProduto,
   type Insumo,
   type Produto,
@@ -55,6 +58,7 @@ import {
   type ProdutoInput,
   type SubgrupoProduto,
   type TipoItem,
+  type UnidadeMedida,
 } from "../api";
 
 export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) {
@@ -126,17 +130,25 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
   const [novoTipoCodigo, setNovoTipoCodigo] = useState("");
   const [novoTipoDescricao, setNovoTipoDescricao] = useState("");
 
+  const [unidadesMedida, setUnidadesMedida] = useState<UnidadeMedida[]>([]);
+  const [modalUnidadesAberto, setModalUnidadesAberto] = useState(false);
+  const [novaUnidadeSigla, setNovaUnidadeSigla] = useState("");
+  const [novaUnidadeNome, setNovaUnidadeNome] = useState("");
+  const [novaUnidadeDecimal, setNovaUnidadeDecimal] = useState(false);
+  const [novaUnidadePadrao, setNovaUnidadePadrao] = useState(false);
+
   // Carregar dados
   const carregarDados = async () => {
     setLoading(true);
     try {
-      const [prods, grps, subgrps, ins, prox, tipos] = await Promise.all([
+      const [prods, grps, subgrps, ins, prox, tipos, unids] = await Promise.all([
         fetchProdutos(),
         fetchGrupos(),
         fetchSubgrupos(),
         fetchInsumos(),
         fetchProximoCodigoProduto(),
         fetchTiposItem(),
+        fetchUnidadesMedida(),
       ]);
       setProdutos(prods);
       setGrupos(grps);
@@ -144,6 +156,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
       setInsumos(ins);
       setProximoCod(prox);
       setTiposItem(tipos);
+      setUnidadesMedida(unids);
 
       if (prods.length > 0 && selectedId === null) {
         selecionarProduto(prods[0]);
@@ -783,17 +796,41 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                     <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                         <div className="field">
-                          <label>Unidade de Venda</label>
-                          <select
-                            value={formUnidadeVenda}
-                            onChange={(e) => setFormUnidadeVenda(e.target.value)}
-                          >
-                            <option value="unidade">Unidade (un)</option>
-                            <option value="cento">Cento (100 un)</option>
-                            <option value="fatia">Fatia / Pedaço</option>
-                            <option value="kg">Quilo (kg)</option>
-                            <option value="caixa">Caixa / Kit</option>
-                          </select>
+                          <label>Unidade de Medida / Venda *</label>
+                          <div style={{ display: "flex", gap: "8px" }}>
+                            <select
+                              value={formUnidadeVenda}
+                              onChange={(e) => setFormUnidadeVenda(e.target.value)}
+                              style={{ flex: 1 }}
+                              required
+                            >
+                              {unidadesMedida.length > 0 ? (
+                                unidadesMedida.map((u) => (
+                                  <option key={u.id} value={u.sigla}>
+                                    {u.sigla} - {u.nome}
+                                  </option>
+                                ))
+                              ) : (
+                                <>
+                                  <option value="UN">UN - Unidade</option>
+                                  <option value="KG">KG - Quilo</option>
+                                  <option value="G">G - Grama</option>
+                                  <option value="CENTO">CENTO - Cento</option>
+                                  <option value="CX">CX - Caixa</option>
+                                  <option value="FATIA">FATIA - Fatia</option>
+                                </>
+                              )}
+                            </select>
+                            <button
+                              type="button"
+                              className="button secondary"
+                              onClick={() => setModalUnidadesAberto(true)}
+                              title="Cadastrar / Gerenciar Unidades de Medida"
+                              style={{ padding: "0 10px", fontSize: "12px", whiteSpace: "nowrap" }}
+                            >
+                              <Plus size={14} /> Unidades
+                            </button>
+                          </div>
                         </div>
                         <div className="field">
                           <label>Status</label>
@@ -1471,6 +1508,198 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Gerenciamento de Unidades de Medida */}
+      {modalUnidadesAberto && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "grid",
+            placeItems: "center",
+            zIndex: 100,
+            padding: "20px",
+          }}
+        >
+          <div
+            className="panel"
+            style={{
+              width: "100%",
+              maxWidth: "540px",
+              background: "#fff",
+              borderRadius: "14px",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "16px 20px",
+                borderBottom: "1px solid var(--c-border)",
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+                <Layers size={18} color="var(--c-primary)" /> Cadastro de Unidades de Medida
+              </h3>
+              <button
+                onClick={() => setModalUnidadesAberto(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--c-muted)" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: "20px" }}>
+              {/* Formulário de Criação de Unidade */}
+              <div
+                style={{
+                  background: "#faf6f3",
+                  padding: "14px",
+                  borderRadius: "10px",
+                  marginBottom: "18px",
+                  border: "1px solid #ebdcd3",
+                }}
+              >
+                <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: "10px" }}>
+                  <div className="field">
+                    <label style={{ fontSize: "11px" }}>Sigla *</label>
+                    <input
+                      placeholder="Ex: UN, KG, CX"
+                      value={novaUnidadeSigla}
+                      onChange={(e) => setNovaUnidadeSigla(e.target.value.toUpperCase())}
+                      style={{ textTransform: "uppercase", fontWeight: "bold" }}
+                      maxLength={10}
+                    />
+                  </div>
+                  <div className="field">
+                    <label style={{ fontSize: "11px" }}>Nome Descritivo *</label>
+                    <input
+                      placeholder="Ex: Unidade, Quilo, Caixa..."
+                      value={novaUnidadeNome}
+                      onChange={(e) => setNovaUnidadeNome(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: "16px", marginTop: "10px", alignItems: "center" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", cursor: "pointer", color: "var(--c-text)" }}>
+                    <input
+                      type="checkbox"
+                      checked={novaUnidadeDecimal}
+                      onChange={(e) => setNovaUnidadeDecimal(e.target.checked)}
+                    />
+                    Permite fracionamento (decimais)
+                  </label>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", cursor: "pointer", color: "var(--c-text)" }}>
+                    <input
+                      type="checkbox"
+                      checked={novaUnidadePadrao}
+                      onChange={(e) => setNovaUnidadePadrao(e.target.checked)}
+                    />
+                    Unidade Padrão
+                  </label>
+                </div>
+
+                <div style={{ marginTop: "12px", textAlign: "right" }}>
+                  <button
+                    className="button primary"
+                    onClick={async () => {
+                      if (!novaUnidadeSigla.trim() || !novaUnidadeNome.trim()) {
+                        alert("Preencha a sigla e o nome descritivo.");
+                        return;
+                      }
+                      try {
+                        const saved = await saveUnidadeMedida({
+                          sigla: novaUnidadeSigla.trim().toUpperCase(),
+                          nome: novaUnidadeNome.trim(),
+                          permiteDecimal: novaUnidadeDecimal,
+                          padrao: novaUnidadePadrao,
+                        });
+                        setNovaUnidadeSigla("");
+                        setNovaUnidadeNome("");
+                        setNovaUnidadeDecimal(false);
+                        setNovaUnidadePadrao(false);
+                        setFormUnidadeVenda(saved.sigla);
+                        await carregarDados();
+                        onAction(`Unidade "${saved.sigla}" salva com sucesso!`);
+                      } catch (err: any) {
+                        alert(err.message);
+                      }
+                    }}
+                  >
+                    Salvar Unidade de Medida
+                  </button>
+                </div>
+              </div>
+
+              {/* Listagem de Unidades Cadastradas */}
+              <div style={{ maxHeight: "250px", overflowY: "auto", border: "1px solid var(--c-border)", borderRadius: "8px", padding: "10px" }}>
+                {unidadesMedida.length === 0 ? (
+                  <p style={{ textAlign: "center", color: "var(--c-muted)", fontSize: "12px", margin: "16px 0" }}>
+                    Nenhuma unidade cadastrada.
+                  </p>
+                ) : (
+                  unidadesMedida.map((u) => (
+                    <div
+                      key={u.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "8px 6px",
+                        borderBottom: "1px solid #f5efe9",
+                      }}
+                    >
+                      <div>
+                        <strong style={{ fontSize: "13px", color: "var(--c-primary)" }}>
+                          {u.sigla}
+                        </strong>
+                        <span style={{ marginLeft: "8px", fontSize: "13px", color: "var(--c-text)" }}>
+                          - {u.nome}
+                        </span>
+                        {u.padrao && (
+                          <span style={{ marginLeft: "6px", fontSize: "10px", background: "#f2ece6", color: "var(--c-primary)", padding: "1px 6px", borderRadius: "4px" }}>
+                            Padrão
+                          </span>
+                        )}
+                        {u.permiteDecimal && (
+                          <span style={{ marginLeft: "6px", fontSize: "10px", background: "#eef4fa", color: "#2b6cb0", padding: "1px 6px", borderRadius: "4px" }}>
+                            Fracionável
+                          </span>
+                        )}
+                        {u.totalProdutos !== undefined && u.totalProdutos > 0 && (
+                          <span style={{ marginLeft: "6px", fontSize: "10px", color: "var(--c-muted)" }}>
+                            ({u.totalProdutos} produto{u.totalProdutos > 1 ? "s" : ""})
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Excluir a unidade de medida "${u.sigla}"?`)) return;
+                          try {
+                            await deleteUnidadeMedida(u.id);
+                            await carregarDados();
+                            onAction("Unidade de medida excluída.");
+                          } catch (err: any) {
+                            alert(err.message);
+                          }
+                        }}
+                        style={{ color: "var(--c-danger)", fontSize: "11px", border: "none", background: "none", cursor: "pointer" }}
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
