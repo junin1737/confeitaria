@@ -85,6 +85,14 @@ import {
 } from "./cadastros";
 import { executarProducao, listarProducoes } from "./producao";
 import { listarCompras, parseNfeXml, registrarEntradaNota } from "./compras";
+import {
+  listarPedidos,
+  salvarPedido,
+  alterarStatusPedido,
+  registrarPagamentoPedido,
+  excluirPedido,
+  proximoCodigoPedido,
+} from "./vendas";
 import { migrate } from "./db/migrate";
 import { seed } from "./db/seed";
 
@@ -1133,6 +1141,76 @@ async function start() {
       res.json(parsed);
     } catch (e: any) {
       res.status(500).json({ erro: e?.message || "Erro ao processar XML de nota fiscal" });
+    }
+  });
+
+  // ============================================================================
+  // MÓDULO: VENDAS, ENCOMENDAS & PDV
+  // ============================================================================
+  app.get("/api/pedidos", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const filtros = {
+        status: req.query.status as string | undefined,
+        tipo: req.query.tipo as string | undefined,
+        dataInicio: req.query.dataInicio as string | undefined,
+        dataFim: req.query.dataFim as string | undefined,
+      };
+      const pedidos = await listarPedidos(req.usuario!.empresaId, filtros);
+      const proximoCodigo = await proximoCodigoPedido(req.usuario!.empresaId);
+      res.json({ pedidos, proximoCodigo });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar pedidos" });
+    }
+  });
+
+  app.post("/api/pedidos", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await salvarPedido(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar pedido" });
+    }
+  });
+
+  app.patch("/api/pedidos/:id/status", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const novoStatus = req.body?.status;
+      if (!novoStatus) {
+        res.status(400).json({ erro: "Status não fornecido." });
+        return;
+      }
+      const result = await alterarStatusPedido(req.usuario!.empresaId, Number(req.params.id), novoStatus);
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao alterar status do pedido" });
+    }
+  });
+
+  app.post("/api/pedidos/:id/pagamento", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const valor = Number(req.body?.valorRecebido ?? 0);
+      const forma = String(req.body?.formaPagamento ?? "dinheiro");
+      const result = await registrarPagamentoPedido(req.usuario!.empresaId, Number(req.params.id), valor, forma);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao registrar pagamento do pedido" });
+    }
+  });
+
+  app.delete("/api/pedidos/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await excluirPedido(req.usuario!.empresaId, Number(req.params.id));
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao excluir pedido" });
     }
   });
 

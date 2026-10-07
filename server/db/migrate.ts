@@ -379,9 +379,51 @@ const STATEMENTS = [
     UNIQUE (empresa_id, sigla)
   )`,
 
+  // 28. Módulo de Vendas & Encomendas: tb_pedido (cabeçalho da venda/encomenda)
+  `CREATE TABLE IF NOT EXISTS tb_pedido (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    codigo TEXT NOT NULL,
+    cliente_id INTEGER REFERENCES tb_cliente(id),
+    data_pedido TEXT NOT NULL,
+    data_entrega TEXT,
+    hora_entrega TEXT,
+    tipo TEXT NOT NULL DEFAULT 'encomenda', -- 'balcao' | 'encomenda' | 'delivery'
+    status TEXT NOT NULL DEFAULT 'pendente', -- 'pendente' | 'em_producao' | 'pronto' | 'entregue' | 'cancelado'
+    forma_pagamento TEXT DEFAULT 'dinheiro', -- 'pix' | 'cartao_credito' | 'cartao_debito' | 'dinheiro' | 'a_prazo'
+    status_pagamento TEXT NOT NULL DEFAULT 'pendente', -- 'pendente' | 'pago_parcial' | 'pago'
+    valor_produtos REAL NOT NULL DEFAULT 0,
+    valor_desconto REAL NOT NULL DEFAULT 0,
+    taxa_entrega REAL NOT NULL DEFAULT 0,
+    valor_sinal REAL NOT NULL DEFAULT 0,
+    valor_total REAL NOT NULL DEFAULT 0,
+    observacoes TEXT,
+    endereco_entrega TEXT,
+    criado_em TEXT NOT NULL,
+    atualizado_em TEXT NOT NULL,
+    UNIQUE (empresa_id, codigo)
+  )`,
+
+  // 29. Módulo de Vendas & Encomendas: tb_pedido_item (produtos vendidos)
+  `CREATE TABLE IF NOT EXISTS tb_pedido_item (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pedido_id INTEGER NOT NULL REFERENCES tb_pedido(id) ON DELETE CASCADE,
+    produto_id INTEGER NOT NULL REFERENCES tb_produto(id),
+    quantidade REAL NOT NULL DEFAULT 1,
+    unidade TEXT NOT NULL DEFAULT 'UN',
+    preco_unitario REAL NOT NULL DEFAULT 0,
+    preco_total REAL NOT NULL DEFAULT 0,
+    observacoes TEXT
+  )`,
+
   `CREATE INDEX IF NOT EXISTS idx_producao_empresa ON tb_producao (empresa_id)`,
   `CREATE INDEX IF NOT EXISTS idx_compra_nota_empresa ON tb_compra_nota (empresa_id)`,
   `CREATE INDEX IF NOT EXISTS idx_unidade_medida_empresa ON tb_unidade_medida (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_pedido_empresa ON tb_pedido (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_pedido_cliente ON tb_pedido (cliente_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_pedido_data ON tb_pedido (data_pedido)`,
+  `CREATE INDEX IF NOT EXISTS idx_pedido_status ON tb_pedido (status)`,
+  `CREATE INDEX IF NOT EXISTS idx_pedido_item_pedido ON tb_pedido_item (pedido_id)`,
 ];
 
 /**

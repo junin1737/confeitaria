@@ -51,6 +51,7 @@ import { CustomersPage } from "./pages/CustomersPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
 import { ProductionPage } from "./pages/ProductionPage";
 import { PurchasesPage } from "./pages/PurchasesPage";
+import { OrdersPage } from "./pages/OrdersPage";
 import { fetchMe, iniciais, logoutRequest, type UsuarioSessao } from "./api";
 import { LoginPage } from "./pages/LoginPage";
 import { applyTheme, loadSavedTheme, saveTheme, type ThemeColors } from "./theme";
@@ -295,6 +296,7 @@ export default function App() {
           {page === "dashboard" ? (
             <DashboardPage onAction={notify} onNavigate={(next) => goTo(next)} userName={firstName} />
           ) : null}
+          {page === "pedidos" ? <OrdersPage onAction={notify} /> : null}
           {page === "catalogo" ? <ProductsPage onAction={notify} /> : null}
           {page === "producao" ? <ProductionPage onAction={notify} /> : null}
           {page === "compras" ? <PurchasesPage onAction={notify} /> : null}
@@ -306,6 +308,7 @@ export default function App() {
             <SettingsPage colors={colors} onColorsChange={setColors} onAction={notify} />
           ) : null}
           {page !== "dashboard" &&
+          page !== "pedidos" &&
           page !== "funcionarios" &&
           page !== "configuracoes" &&
           page !== "admin" &&

@@ -1301,5 +1301,138 @@ export async function parseNfeXmlApi(xmlString: string): Promise<XmlNfeParsed> {
   return data;
 }
 
+/**
+ * ============================================================================
+ * [MÓDULO: VENDAS & PEDIDOS]
+ * ============================================================================
+ */
+
+export type PedidoItem = {
+  id?: number;
+  produtoId: number;
+  produtoNome?: string;
+  quantidade: number;
+  unidade?: string;
+  precoUnitario: number;
+  precoTotal?: number;
+  observacoes?: string | null;
+};
+
+export type Pedido = {
+  id: number;
+  codigo: string;
+  clienteId: number | null;
+  clienteNome: string | null;
+  clienteTelefone: string | null;
+  dataPedido: string;
+  dataEntrega: string | null;
+  horaEntrega: string | null;
+  tipo: "balcao" | "encomenda" | "delivery";
+  status: "pendente" | "em_producao" | "pronto" | "entregue" | "cancelado";
+  formaPagamento: string;
+  statusPagamento: string;
+  valorProdutos: number;
+  valorDesconto: number;
+  taxaEntrega: number;
+  valorSinal: number;
+  valorTotal: number;
+  valorRestante: number;
+  observacoes: string | null;
+  enderecoEntrega: string | null;
+  criadoEm: string;
+  atualizadoEm: string;
+  itens: PedidoItem[];
+};
+
+export type PedidoInput = {
+  id?: number;
+  codigo?: string;
+  clienteId?: number | null;
+  dataPedido?: string;
+  dataEntrega?: string | null;
+  horaEntrega?: string | null;
+  tipo?: "balcao" | "encomenda" | "delivery";
+  status?: "pendente" | "em_producao" | "pronto" | "entregue" | "cancelado";
+  formaPagamento?: string;
+  statusPagamento?: string;
+  valorDesconto?: number;
+  taxaEntrega?: number;
+  valorSinal?: number;
+  observacoes?: string | null;
+  enderecoEntrega?: string | null;
+  itens: {
+    produtoId: number;
+    quantidade: number;
+    unidade?: string;
+    precoUnitario: number;
+    observacoes?: string;
+  }[];
+};
+
+export async function fetchPedidos(filtros?: {
+  status?: string;
+  tipo?: string;
+  dataInicio?: string;
+  dataFim?: string;
+}): Promise<{ pedidos: Pedido[]; proximoCodigo: string }> {
+  const query = new URLSearchParams();
+  if (filtros?.status) query.set("status", filtros.status);
+  if (filtros?.tipo) query.set("tipo", filtros.tipo);
+  if (filtros?.dataInicio) query.set("dataInicio", filtros.dataInicio);
+  if (filtros?.dataFim) query.set("dataFim", filtros.dataFim);
+
+  const res = await fetch(`/api/pedidos?${query.toString()}`, { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar lista de pedidos");
+  return readJson<{ pedidos: Pedido[]; proximoCodigo: string }>(res);
+}
+
+export async function savePedido(dados: PedidoInput): Promise<{ id: number; ok: boolean }> {
+  const res = await fetch("/api/pedidos", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ id?: number; ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao salvar pedido");
+  return { id: data.id!, ok: true };
+}
+
+export async function updatePedidoStatus(
+  id: number,
+  novoStatus: "pendente" | "em_producao" | "pronto" | "entregue" | "cancelado"
+): Promise<void> {
+  const res = await fetch(`/api/pedidos/${id}/status`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: novoStatus }),
+  });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao atualizar status do pedido");
+}
+
+export async function registrarPagamentoPedidoApi(
+  id: number,
+  valorRecebido: number,
+  formaPagamento: string
+): Promise<{ ok: boolean; statusPagamento: string; novoSinal: number }> {
+  const res = await fetch(`/api/pedidos/${id}/pagamento`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ valorRecebido, formaPagamento }),
+  });
+  const data = await readJson<{ ok?: boolean; statusPagamento?: string; novoSinal?: number; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao registrar pagamento");
+  return { ok: true, statusPagamento: data.statusPagamento!, novoSinal: data.novoSinal! };
+}
+
+export async function deletePedido(id: number): Promise<void> {
+  const res = await fetch(`/api/pedidos/${id}`, { method: "DELETE", credentials: "include" });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao excluir pedido");
+}
+
 
 
