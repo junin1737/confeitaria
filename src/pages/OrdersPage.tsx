@@ -17,9 +17,6 @@ import {
   Plus,
   Search,
   Filter,
-  Calendar,
-  Clock,
-  User,
   Phone,
   CheckCircle2,
   Clock3,
@@ -29,11 +26,6 @@ import {
   DollarSign,
   Trash2,
   X,
-  CreditCard,
-  QrCode,
-  Banknote,
-  AlertCircle,
-  FileText,
 } from "lucide-react";
 import {
   fetchPedidos,
@@ -551,12 +543,12 @@ export function OrdersPage({ onAction }: OrdersPageProps) {
                         <div style={{ display: "inline-flex", gap: "6px" }}>
                           {p.status === "pendente" && (
                             <button
-                              className="button secondary"
-                              style={{ padding: "4px 8px", fontSize: "11px" }}
+                              className="button primary"
+                              style={{ padding: "4px 8px", fontSize: "11px", background: "#16a34a", color: "#fff", border: "none" }}
                               onClick={() => handleMudarStatus(p, "em_producao")}
-                              title="Iniciar Produção"
+                              title="Aprovar Pedido (gera títulos a receber)"
                             >
-                              <ChefHat size={13} /> Produzir
+                              <CheckCircle2 size={13} /> Aprovar
                             </button>
                           )}
                           {p.status === "em_producao" && (
@@ -566,7 +558,7 @@ export function OrdersPage({ onAction }: OrdersPageProps) {
                               onClick={() => handleMudarStatus(p, "pronto")}
                               title="Marcar como Pronto"
                             >
-                              <CheckCircle2 size={13} /> Pronto
+                              <ChefHat size={13} /> Pronto
                             </button>
                           )}
                           {p.status === "pronto" && (
@@ -577,6 +569,16 @@ export function OrdersPage({ onAction }: OrdersPageProps) {
                               title="Marcar como Entregue"
                             >
                               <Truck size={13} /> Entregar
+                            </button>
+                          )}
+                          {p.status !== "cancelado" && p.status !== "entregue" && (
+                            <button
+                              className="button secondary"
+                              style={{ padding: "4px 8px", fontSize: "11px", color: "#dc2626", borderColor: "#fecaca" }}
+                              onClick={() => handleMudarStatus(p, "cancelado")}
+                              title="Cancelar Pedido e estornar títulos em aberto"
+                            >
+                              <X size={12} /> Cancelar
                             </button>
                           )}
                           <button

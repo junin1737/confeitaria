@@ -84,7 +84,7 @@ import {
   listarHistoricoCustoProduto,
 } from "./cadastros";
 import { executarProducao, listarProducoes } from "./producao";
-import { listarCompras, parseNfeXml, registrarEntradaNota } from "./compras";
+import { cancelarCompraNota, listarCompras, parseNfeXml, registrarEntradaNota } from "./compras";
 import {
   listarPedidos,
   salvarPedido,
@@ -93,6 +93,33 @@ import {
   excluirPedido,
   proximoCodigoPedido,
 } from "./vendas";
+import {
+  listarPlanoContas,
+  salvarPlanoConta,
+  excluirPlanoConta,
+  listarCentrosCusto,
+  salvarCentroCusto,
+  excluirCentroCusto,
+  listarContasBancarias,
+  salvarContaBancaria,
+  listarTitulosPagar,
+  salvarTituloPagar,
+  baixarTituloPagar,
+  cancelarTituloPagar,
+  listarTitulosReceber,
+  salvarTituloReceber,
+  baixarTituloReceber,
+  cancelarTituloReceber,
+  obterCaixaAberto,
+  listarHistoricoCaixas,
+  calcularSaldoCaixa,
+  abrirCaixa,
+  fecharCaixa,
+  lancarMovimentoCaixa,
+  listarMovimentacoes,
+  transferirEntreContasBancarias,
+  transferirCaixaBanco,
+} from "./financeiro";
 import { migrate } from "./db/migrate";
 import { seed } from "./db/seed";
 
@@ -1211,6 +1238,374 @@ async function start() {
       res.json(result);
     } catch (e: any) {
       res.status(500).json({ erro: e?.message || "Erro ao excluir pedido" });
+    }
+  });
+
+  // Cancelamento de Nota Fiscal de Compra
+  app.post("/api/compras/:id/cancelar", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await cancelarCompraNota(req.usuario!.empresaId, Number(req.params.id));
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao cancelar compra" });
+    }
+  });
+
+  // ============================================================================
+  // MÓDULO FINANCEIRO: PLANO DE CONTAS
+  // ============================================================================
+  app.get("/api/financeiro/plano-contas", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const tipo = req.query.tipo as "receita" | "despesa" | undefined;
+      const apenasAnaliticas = req.query.apenasAnaliticas === "true";
+      const apenasAtivos = req.query.apenasAtivos === "true";
+      const contas = await listarPlanoContas(req.usuario!.empresaId, { tipo, apenasAnaliticas, apenasAtivos });
+      res.json({ contas });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar plano de contas" });
+    }
+  });
+
+  app.post("/api/financeiro/plano-contas", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await salvarPlanoConta(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar conta do plano" });
+    }
+  });
+
+  app.delete("/api/financeiro/plano-contas/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await excluirPlanoConta(req.usuario!.empresaId, Number(req.params.id));
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao excluir conta do plano" });
+    }
+  });
+
+  // ============================================================================
+  // MÓDULO FINANCEIRO: CENTROS DE CUSTO
+  // ============================================================================
+  app.get("/api/financeiro/centros-custo", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const apenasAtivos = req.query.apenasAtivos === "true";
+      const centros = await listarCentrosCusto(req.usuario!.empresaId, apenasAtivos);
+      res.json({ centros });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar centros de custo" });
+    }
+  });
+
+  app.post("/api/financeiro/centros-custo", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await salvarCentroCusto(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar centro de custo" });
+    }
+  });
+
+  app.delete("/api/financeiro/centros-custo/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await excluirCentroCusto(req.usuario!.empresaId, Number(req.params.id));
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao excluir centro de custo" });
+    }
+  });
+
+  // ============================================================================
+  // MÓDULO FINANCEIRO: CONTAS BANCÁRIAS
+  // ============================================================================
+  app.get("/api/financeiro/contas-bancarias", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const apenasAtivas = req.query.apenasAtivas === "true";
+      const contas = await listarContasBancarias(req.usuario!.empresaId, apenasAtivas);
+      res.json({ contas });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar contas bancárias" });
+    }
+  });
+
+  app.post("/api/financeiro/contas-bancarias", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await salvarContaBancaria(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar conta bancária" });
+    }
+  });
+
+  // ============================================================================
+  // MÓDULO FINANCEIRO: CONTAS A PAGAR
+  // ============================================================================
+  app.get("/api/financeiro/titulos-pagar", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const filtros = {
+        status: req.query.status as string | undefined,
+        fornecedorId: req.query.fornecedorId ? Number(req.query.fornecedorId) : undefined,
+        planoContasId: req.query.planoContasId ? Number(req.query.planoContasId) : undefined,
+        centroCustoId: req.query.centroCustoId ? Number(req.query.centroCustoId) : undefined,
+        dataInicio: req.query.dataInicio as string | undefined,
+        dataFim: req.query.dataFim as string | undefined,
+      };
+      const titulos = await listarTitulosPagar(req.usuario!.empresaId, filtros);
+      res.json({ titulos });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar contas a pagar" });
+    }
+  });
+
+  app.post("/api/financeiro/titulos-pagar", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await salvarTituloPagar(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar título a pagar" });
+    }
+  });
+
+  app.post("/api/financeiro/titulos-pagar/:id/baixa", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await baixarTituloPagar(req.usuario!.empresaId, {
+        tituloId: Number(req.params.id),
+        usuarioId: req.usuario!.id,
+        ...req.body,
+      });
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao baixar título a pagar" });
+    }
+  });
+
+  app.patch("/api/financeiro/titulos-pagar/:id/cancelar", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await cancelarTituloPagar(req.usuario!.empresaId, Number(req.params.id));
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao cancelar título a pagar" });
+    }
+  });
+
+  // ============================================================================
+  // MÓDULO FINANCEIRO: CONTAS A RECEBER
+  // ============================================================================
+  app.get("/api/financeiro/titulos-receber", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const filtros = {
+        status: req.query.status as string | undefined,
+        clienteId: req.query.clienteId ? Number(req.query.clienteId) : undefined,
+        planoContasId: req.query.planoContasId ? Number(req.query.planoContasId) : undefined,
+        centroCustoId: req.query.centroCustoId ? Number(req.query.centroCustoId) : undefined,
+        dataInicio: req.query.dataInicio as string | undefined,
+        dataFim: req.query.dataFim as string | undefined,
+      };
+      const titulos = await listarTitulosReceber(req.usuario!.empresaId, filtros);
+      res.json({ titulos });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar contas a receber" });
+    }
+  });
+
+  app.post("/api/financeiro/titulos-receber", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await salvarTituloReceber(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao salvar título a receber" });
+    }
+  });
+
+  app.post("/api/financeiro/titulos-receber/:id/baixa", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await baixarTituloReceber(req.usuario!.empresaId, {
+        tituloId: Number(req.params.id),
+        usuarioId: req.usuario!.id,
+        ...req.body,
+      });
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao baixar título a receber" });
+    }
+  });
+
+  app.patch("/api/financeiro/titulos-receber/:id/cancelar", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await cancelarTituloReceber(req.usuario!.empresaId, Number(req.params.id));
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao cancelar título a receber" });
+    }
+  });
+
+  // ============================================================================
+  // MÓDULO FINANCEIRO: CAIXA
+  // ============================================================================
+  app.get("/api/financeiro/caixa/aberto", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const caixa = await obterCaixaAberto(req.usuario!.empresaId, req.usuario!.id);
+      res.json({ caixa });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao verificar caixa aberto" });
+    }
+  });
+
+  app.get("/api/financeiro/caixa/historico", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const historico = await listarHistoricoCaixas(req.usuario!.empresaId);
+      res.json({ historico });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar histórico de caixas" });
+    }
+  });
+
+  app.get("/api/financeiro/caixa/:id/saldo", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const saldo = await calcularSaldoCaixa(req.usuario!.empresaId, Number(req.params.id));
+      if (!saldo) {
+        res.status(404).json({ erro: "Caixa não encontrado" });
+        return;
+      }
+      res.json({ saldo });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao calcular saldo do caixa" });
+    }
+  });
+
+  app.post("/api/financeiro/caixa/abrir", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const saldoInicial = Number(req.body?.saldoInicial ?? 0);
+      const dataAbertura = req.body?.dataAbertura as string | undefined;
+      const result = await abrirCaixa(req.usuario!.empresaId, req.usuario!.id, saldoInicial, dataAbertura);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao abrir caixa" });
+    }
+  });
+
+  app.post("/api/financeiro/caixa/:id/fechar", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const saldoInformado = Number(req.body?.saldoInformado ?? 0);
+      const obs = req.body?.observacoes as string | undefined;
+      const result = await fecharCaixa(req.usuario!.empresaId, Number(req.params.id), saldoInformado, obs);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao fechar caixa" });
+    }
+  });
+
+  app.post("/api/financeiro/caixa/movimento", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await lancarMovimentoCaixa(req.usuario!.empresaId, req.usuario!.id, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao registrar movimento de caixa" });
+    }
+  });
+
+  // ============================================================================
+  // MÓDULO FINANCEIRO: EXTRATO, MOVIMENTAÇÕES & TRANSFERÊNCIAS
+  // ============================================================================
+  app.get("/api/financeiro/movimentacoes", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const filtros = {
+        caixaId: req.query.caixaId ? Number(req.query.caixaId) : undefined,
+        contaBancariaId: req.query.contaBancariaId ? Number(req.query.contaBancariaId) : undefined,
+        dataInicio: req.query.dataInicio as string | undefined,
+        dataFim: req.query.dataFim as string | undefined,
+        tipo: req.query.tipo as string | undefined,
+      };
+      const movimentacoes = await listarMovimentacoes(req.usuario!.empresaId, filtros);
+      res.json({ movimentacoes });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao listar movimentações financeiras" });
+    }
+  });
+
+  app.post("/api/financeiro/transferencia-bancos", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await transferirEntreContasBancarias(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao realizar transferência entre contas" });
+    }
+  });
+
+  app.post("/api/financeiro/transferencia-caixa-banco", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const result = await transferirCaixaBanco(req.usuario!.empresaId, req.body);
+      if ("erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao realizar transferência caixa-banco" });
     }
   });
 

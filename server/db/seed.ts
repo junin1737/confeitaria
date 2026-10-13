@@ -20,6 +20,7 @@ import { db } from "./client";
 import { garantirMensagens } from "../mensagens";
 import { salvarInsumo, salvarReceita } from "../precificacao";
 import { salvarCliente, salvarFornecedor, salvarProduto, salvarSubgrupo, salvarTipoItem, salvarUnidadeMedida } from "../cadastros";
+import { seedPlanoContasPadrao, seedCentrosCustoPadrao } from "../financeiro";
 
 const NOW = () => new Date().toISOString();
 
@@ -114,6 +115,10 @@ export async function seed() {
 
   // 4. TIPOS DE ITENS OFICIAIS (Conforme Norma Fiscal / SPED)
   await seedTiposItemPadrao(empresaId);
+
+  // 5. PLANO DE CONTAS & CENTROS DE CUSTO PADRÃO
+  await seedPlanoContasPadrao(empresaId);
+  await seedCentrosCustoPadrao(empresaId);
 }
 
 /**

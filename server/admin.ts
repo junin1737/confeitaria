@@ -21,6 +21,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./db/client";
 import { garantirMensagens } from "./mensagens";
 import { seedTiposItemPadrao } from "./db/seed";
+import { seedPlanoContasPadrao, seedCentrosCustoPadrao } from "./financeiro";
 
 /**
  * [CONTRATO DE DADOS: EmpresaAdmin]
@@ -287,6 +288,8 @@ export async function criarEmpresaAdmin(dados: {
   // Provisiona mensagens e dados iniciais
   await garantirMensagens(empresaId);
   await seedTiposItemPadrao(empresaId);
+  await seedPlanoContasPadrao(empresaId);
+  await seedCentrosCustoPadrao(empresaId);
 
   return {
     ok: true,

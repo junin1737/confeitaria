@@ -1233,6 +1233,11 @@ export type CompraNota = {
   valorFrete: number;
   valorTotal: number;
   observacoes: string | null;
+  planoContasId?: number | null;
+  centroCustoId?: number | null;
+  status?: string;
+  parcelas?: number;
+  formaPagamento?: string;
   criadoEm: string;
   itens: CompraItem[];
 };
@@ -1249,6 +1254,11 @@ export type CompraNotaInput = {
   valorTotal: number;
   observacoes?: string | null;
   arquivoXml?: string | null;
+  planoContasId?: number | null;
+  centroCustoId?: number | null;
+  parcelas?: number;
+  diasVencimento?: number;
+  formaPagamento?: string;
   itens: CompraItem[];
 };
 
@@ -1432,6 +1442,540 @@ export async function deletePedido(id: number): Promise<void> {
   const res = await fetch(`/api/pedidos/${id}`, { method: "DELETE", credentials: "include" });
   const data = await readJson<{ ok?: boolean; erro?: string }>(res);
   if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao excluir pedido");
+}
+
+export async function cancelarCompraApi(id: number): Promise<void> {
+  const res = await fetch(`/api/compras/${id}/cancelar`, {
+    method: "POST",
+    credentials: "include",
+  });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao cancelar compra");
+}
+
+// ============================================================================
+// MÓDULO FINANCEIRO: CONTRATOS & CLIENTE API
+// ============================================================================
+
+export type PlanoConta = {
+  id: number;
+  codigo: string;
+  nome: string;
+  tipo: "receita" | "despesa";
+  contaPaiId: number | null;
+  contaPaiNome?: string | null;
+  tipoConta: "sintetica" | "analitica";
+  ativo: boolean;
+  criadoEm: string;
+  nivel?: number;
+};
+
+export type CentroCusto = {
+  id: number;
+  codigo: string;
+  nome: string;
+  descricao: string | null;
+  ativo: boolean;
+  criadoEm: string;
+};
+
+export type ContaBancaria = {
+  id: number;
+  banco: string;
+  agencia: string | null;
+  conta: string;
+  tipo: "corrente" | "poupanca" | "pagamento" | "investimento";
+  saldoInicial: number;
+  saldoAtual?: number;
+  ativo: boolean;
+  criadoEm: string;
+};
+
+export type TituloPagar = {
+  id: number;
+  fornecedorId: number | null;
+  fornecedorNome?: string | null;
+  compraId: number | null;
+  descricao: string;
+  planoContasId: number;
+  planoContasCodigo?: string | null;
+  planoContasNome?: string | null;
+  centroCustoId: number | null;
+  centroCustoNome?: string | null;
+  valorOriginal: number;
+  valorPago: number;
+  saldoRestante: number;
+  vencimento: string;
+  numeroParcela: number;
+  totalParcelas: number;
+  formaPagamento: string;
+  status: "aberto" | "pago_parcial" | "pago" | "cancelado";
+  dataPagamento: string | null;
+  observacoes: string | null;
+  criadoEm: string;
+};
+
+export type TituloReceber = {
+  id: number;
+  clienteId: number | null;
+  clienteNome?: string | null;
+  pedidoId: number | null;
+  descricao: string;
+  planoContasId: number;
+  planoContasCodigo?: string | null;
+  planoContasNome?: string | null;
+  centroCustoId: number | null;
+  centroCustoNome?: string | null;
+  valorOriginal: number;
+  valorRecebido: number;
+  saldoRestante: number;
+  vencimento: string;
+  numeroParcela: number;
+  totalParcelas: number;
+  formaPagamento: string;
+  status: "aberto" | "pago_parcial" | "pago" | "cancelado";
+  dataRecebimento: string | null;
+  observacoes: string | null;
+  criadoEm: string;
+};
+
+export type Caixa = {
+  id: number;
+  usuarioId: number;
+  usuarioNome?: string;
+  dataAbertura: string;
+  saldoInicial: number;
+  dataFechamento: string | null;
+  saldoInformado: number | null;
+  saldoCalculado: number | null;
+  diferenca: number | null;
+  status: "aberto" | "fechado";
+  observacoes: string | null;
+  criadoEm: string;
+};
+
+export type MovimentacaoFinanceira = {
+  id: number;
+  tipo: "receita" | "despesa" | "transferencia";
+  origem: string;
+  tituloPagarId: number | null;
+  tituloReceberId: number | null;
+  caixaId: number | null;
+  contaBancariaId: number | null;
+  contaBancariaNome?: string | null;
+  contaBancariaDestinoId: number | null;
+  planoContasId: number | null;
+  planoContasNome?: string | null;
+  centroCustoId: number | null;
+  centroCustoNome?: string | null;
+  valor: number;
+  jurosMulta: number;
+  desconto: number;
+  valorLiquido: number;
+  dataMovimento: string;
+  descricao: string;
+  criadoEm: string;
+};
+
+// 1. PLANO DE CONTAS
+export async function fetchPlanoContas(filtros?: {
+  tipo?: "receita" | "despesa";
+  apenasAnaliticas?: boolean;
+  apenasAtivos?: boolean;
+}): Promise<PlanoConta[]> {
+  const query = new URLSearchParams();
+  if (filtros?.tipo) query.set("tipo", filtros.tipo);
+  if (filtros?.apenasAnaliticas) query.set("apenasAnaliticas", "true");
+  if (filtros?.apenasAtivos) query.set("apenasAtivos", "true");
+
+  const res = await fetch(`/api/financeiro/plano-contas?${query.toString()}`, { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar plano de contas");
+  const data = await readJson<{ contas: PlanoConta[] }>(res);
+  return data.contas;
+}
+
+export async function savePlanoConta(dados: {
+  id?: number;
+  codigo: string;
+  nome: string;
+  tipo: "receita" | "despesa";
+  contaPaiId?: number | null;
+  tipoConta?: "sintetica" | "analitica";
+  ativo?: boolean;
+}): Promise<{ id: number; ok: boolean }> {
+  const res = await fetch("/api/financeiro/plano-contas", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ id?: number; ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao salvar conta no plano");
+  return { id: data.id!, ok: true };
+}
+
+export async function deletePlanoConta(id: number): Promise<void> {
+  const res = await fetch(`/api/financeiro/plano-contas/${id}`, { method: "DELETE", credentials: "include" });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao excluir conta");
+}
+
+// 2. CENTROS DE CUSTO
+export async function fetchCentrosCusto(apenasAtivos = false): Promise<CentroCusto[]> {
+  const query = apenasAtivos ? "?apenasAtivos=true" : "";
+  const res = await fetch(`/api/financeiro/centros-custo${query}`, { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar centros de custo");
+  const data = await readJson<{ centros: CentroCusto[] }>(res);
+  return data.centros;
+}
+
+export async function saveCentroCusto(dados: {
+  id?: number;
+  codigo: string;
+  nome: string;
+  descricao?: string;
+  ativo?: boolean;
+}): Promise<{ id: number; ok: boolean }> {
+  const res = await fetch("/api/financeiro/centros-custo", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ id?: number; ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao salvar centro de custo");
+  return { id: data.id!, ok: true };
+}
+
+export async function deleteCentroCusto(id: number): Promise<void> {
+  const res = await fetch(`/api/financeiro/centros-custo/${id}`, { method: "DELETE", credentials: "include" });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao excluir centro de custo");
+}
+
+// 3. CONTAS BANCÁRIAS
+export async function fetchContasBancarias(apenasAtivas = false): Promise<ContaBancaria[]> {
+  const query = apenasAtivas ? "?apenasAtivas=true" : "";
+  const res = await fetch(`/api/financeiro/contas-bancarias${query}`, { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar contas bancárias");
+  const data = await readJson<{ contas: ContaBancaria[] }>(res);
+  return data.contas;
+}
+
+export async function saveContaBancaria(dados: {
+  id?: number;
+  banco: string;
+  agencia?: string;
+  conta: string;
+  tipo?: "corrente" | "poupanca" | "pagamento" | "investimento";
+  saldoInicial?: number;
+  ativo?: boolean;
+}): Promise<{ id: number; ok: boolean }> {
+  const res = await fetch("/api/financeiro/contas-bancarias", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ id?: number; ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao salvar conta bancária");
+  return { id: data.id!, ok: true };
+}
+
+// 4. CONTAS A PAGAR
+export async function fetchTitulosPagar(filtros?: {
+  status?: string;
+  fornecedorId?: number;
+  planoContasId?: number;
+  centroCustoId?: number;
+  dataInicio?: string;
+  dataFim?: string;
+}): Promise<TituloPagar[]> {
+  const query = new URLSearchParams();
+  if (filtros?.status) query.set("status", filtros.status);
+  if (filtros?.fornecedorId) query.set("fornecedorId", String(filtros.fornecedorId));
+  if (filtros?.planoContasId) query.set("planoContasId", String(filtros.planoContasId));
+  if (filtros?.centroCustoId) query.set("centroCustoId", String(filtros.centroCustoId));
+  if (filtros?.dataInicio) query.set("dataInicio", filtros.dataInicio);
+  if (filtros?.dataFim) query.set("dataFim", filtros.dataFim);
+
+  const res = await fetch(`/api/financeiro/titulos-pagar?${query.toString()}`, { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar contas a pagar");
+  const data = await readJson<{ titulos: TituloPagar[] }>(res);
+  return data.titulos;
+}
+
+export async function saveTituloPagar(dados: {
+  id?: number;
+  fornecedorId?: number | null;
+  compraId?: number | null;
+  descricao: string;
+  planoContasId: number;
+  centroCustoId?: number | null;
+  valorOriginal: number;
+  vencimento: string;
+  numeroParcela?: number;
+  totalParcelas?: number;
+  formaPagamento?: string;
+  observacoes?: string;
+}): Promise<{ id: number; ok: boolean }> {
+  const res = await fetch("/api/financeiro/titulos-pagar", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ id?: number; ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao salvar título a pagar");
+  return { id: data.id!, ok: true };
+}
+
+export async function baixarTituloPagarApi(
+  id: number,
+  dados: {
+    dataBaixa: string;
+    valorBaixa: number;
+    jurosMulta?: number;
+    desconto?: number;
+    contaDestinoTipo: "caixa" | "banco";
+    caixaId?: number;
+    contaBancariaId?: number;
+    observacoes?: string;
+  }
+): Promise<{ ok: boolean; status: string; valorPago: number; saldoRestante: number }> {
+  const res = await fetch(`/api/financeiro/titulos-pagar/${id}/baixa`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ ok?: boolean; status?: string; valorPago?: number; saldoRestante?: number; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao baixar título a pagar");
+  return { ok: true, status: data.status!, valorPago: data.valorPago!, saldoRestante: data.saldoRestante! };
+}
+
+export async function cancelarTituloPagarApi(id: number): Promise<void> {
+  const res = await fetch(`/api/financeiro/titulos-pagar/${id}/cancelar`, {
+    method: "PATCH",
+    credentials: "include",
+  });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao cancelar título a pagar");
+}
+
+// 5. CONTAS A RECEBER
+export async function fetchTitulosReceber(filtros?: {
+  status?: string;
+  clienteId?: number;
+  planoContasId?: number;
+  centroCustoId?: number;
+  dataInicio?: string;
+  dataFim?: string;
+}): Promise<TituloReceber[]> {
+  const query = new URLSearchParams();
+  if (filtros?.status) query.set("status", filtros.status);
+  if (filtros?.clienteId) query.set("clienteId", String(filtros.clienteId));
+  if (filtros?.planoContasId) query.set("planoContasId", String(filtros.planoContasId));
+  if (filtros?.centroCustoId) query.set("centroCustoId", String(filtros.centroCustoId));
+  if (filtros?.dataInicio) query.set("dataInicio", filtros.dataInicio);
+  if (filtros?.dataFim) query.set("dataFim", filtros.dataFim);
+
+  const res = await fetch(`/api/financeiro/titulos-receber?${query.toString()}`, { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar contas a receber");
+  const data = await readJson<{ titulos: TituloReceber[] }>(res);
+  return data.titulos;
+}
+
+export async function saveTituloReceber(dados: {
+  id?: number;
+  clienteId?: number | null;
+  pedidoId?: number | null;
+  descricao: string;
+  planoContasId: number;
+  centroCustoId?: number | null;
+  valorOriginal: number;
+  vencimento: string;
+  numeroParcela?: number;
+  totalParcelas?: number;
+  formaPagamento?: string;
+  observacoes?: string;
+}): Promise<{ id: number; ok: boolean }> {
+  const res = await fetch("/api/financeiro/titulos-receber", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ id?: number; ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao salvar título a receber");
+  return { id: data.id!, ok: true };
+}
+
+export async function baixarTituloReceberApi(
+  id: number,
+  dados: {
+    dataBaixa: string;
+    valorBaixa: number;
+    jurosMulta?: number;
+    desconto?: number;
+    contaDestinoTipo: "caixa" | "banco";
+    caixaId?: number;
+    contaBancariaId?: number;
+    observacoes?: string;
+  }
+): Promise<{ ok: boolean; status: string; valorRecebido: number; saldoRestante: number }> {
+  const res = await fetch(`/api/financeiro/titulos-receber/${id}/baixa`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ ok?: boolean; status?: string; valorRecebido?: number; saldoRestante?: number; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao baixar título a receber");
+  return { ok: true, status: data.status!, valorRecebido: data.valorRecebido!, saldoRestante: data.saldoRestante! };
+}
+
+export async function cancelarTituloReceberApi(id: number): Promise<void> {
+  const res = await fetch(`/api/financeiro/titulos-receber/${id}/cancelar`, {
+    method: "PATCH",
+    credentials: "include",
+  });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao cancelar título a receber");
+}
+
+// 6. CAIXA
+export async function fetchCaixaAberto(): Promise<Caixa | null> {
+  const res = await fetch("/api/financeiro/caixa/aberto", { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao verificar caixa aberto");
+  const data = await readJson<{ caixa: Caixa | null }>(res);
+  return data.caixa;
+}
+
+export async function fetchHistoricoCaixas(): Promise<Caixa[]> {
+  const res = await fetch("/api/financeiro/caixa/historico", { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar histórico de caixas");
+  const data = await readJson<{ historico: Caixa[] }>(res);
+  return data.historico;
+}
+
+export async function fetchSaldoCaixa(id: number): Promise<{
+  saldoInicial: number;
+  receitas: number;
+  suprimentos: number;
+  despesas: number;
+  sangrias: number;
+  totalEntradas: number;
+  totalSaidas: number;
+  saldoCalculado: number;
+}> {
+  const res = await fetch(`/api/financeiro/caixa/${id}/saldo`, { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao consultar saldo do caixa");
+  const data = await readJson<{ saldo: any }>(res);
+  return data.saldo;
+}
+
+export async function abrirCaixaApi(saldoInicial: number, dataAbertura?: string): Promise<{ id: number; ok: boolean }> {
+  const res = await fetch("/api/financeiro/caixa/abrir", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ saldoInicial, dataAbertura }),
+  });
+  const data = await readJson<{ id?: number; ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao abrir caixa");
+  return { id: data.id!, ok: true };
+}
+
+export async function fecharCaixaApi(
+  id: number,
+  saldoInformado: number,
+  observacoes?: string
+): Promise<{ ok: boolean; saldoCalculado: number; saldoInformado: number; diferenca: number }> {
+  const res = await fetch(`/api/financeiro/caixa/${id}/fechar`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ saldoInformado, observacoes }),
+  });
+  const data = await readJson<{ ok?: boolean; saldoCalculado?: number; saldoInformado?: number; diferenca?: number; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao fechar caixa");
+  return { ok: true, saldoCalculado: data.saldoCalculado!, saldoInformado: data.saldoInformado!, diferenca: data.diferenca! };
+}
+
+export async function lancarMovimentoCaixaApi(dados: {
+  caixaId: number;
+  tipo: "entrada" | "saida" | "sangria" | "suprimento";
+  valor: number;
+  planoContasId?: number | null;
+  centroCustoId?: number | null;
+  descricao: string;
+  dataMovimento?: string;
+}): Promise<void> {
+  const res = await fetch("/api/financeiro/caixa/movimento", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao lançar movimento no caixa");
+}
+
+// 7. EXTRATO & TRANSFERÊNCIAS
+export async function fetchMovimentacoes(filtros?: {
+  caixaId?: number;
+  contaBancariaId?: number;
+  dataInicio?: string;
+  dataFim?: string;
+  tipo?: string;
+}): Promise<MovimentacaoFinanceira[]> {
+  const query = new URLSearchParams();
+  if (filtros?.caixaId) query.set("caixaId", String(filtros.caixaId));
+  if (filtros?.contaBancariaId) query.set("contaBancariaId", String(filtros.contaBancariaId));
+  if (filtros?.dataInicio) query.set("dataInicio", filtros.dataInicio);
+  if (filtros?.dataFim) query.set("dataFim", filtros.dataFim);
+  if (filtros?.tipo) query.set("tipo", filtros.tipo);
+
+  const res = await fetch(`/api/financeiro/movimentacoes?${query.toString()}`, { credentials: "include" });
+  if (!res.ok) throw new Error("Erro ao carregar movimentações financeiras");
+  const data = await readJson<{ movimentacoes: MovimentacaoFinanceira[] }>(res);
+  return data.movimentacoes;
+}
+
+export async function transferirBancosApi(dados: {
+  contaOrigemId: number;
+  contaDestinoId: number;
+  valor: number;
+  dataMovimento: string;
+  descricao?: string;
+}): Promise<void> {
+  const res = await fetch("/api/financeiro/transferencia-bancos", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao transferir entre contas bancárias");
+}
+
+export async function transferirCaixaBancoApi(dados: {
+  sentido: "caixa_para_banco" | "banco_para_caixa";
+  caixaId: number;
+  contaBancariaId: number;
+  valor: number;
+  dataMovimento: string;
+  descricao?: string;
+}): Promise<void> {
+  const res = await fetch("/api/financeiro/transferencia-caixa-banco", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ ok?: boolean; erro?: string }>(res);
+  if (!res.ok || !data.ok) throw new Error(data.erro || "Erro ao realizar transferência caixa-banco");
 }
 
 

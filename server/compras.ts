@@ -11,6 +11,7 @@
  */
 
 import { db } from "./db/client";
+import { gerarTitulosDeCompra, cancelarTitulosDeCompra } from "./financeiro";
 
 const NOW = () => new Date().toISOString();
 
@@ -37,6 +38,11 @@ export type CompraNota = {
   valorFrete: number;
   valorTotal: number;
   observacoes: string | null;
+  planoContasId?: number | null;
+  centroCustoId?: number | null;
+  status?: string;
+  parcelas?: number;
+  formaPagamento?: string;
   criadoEm: string;
   itens: {
     id: number;
@@ -81,6 +87,11 @@ export async function listarCompras(empresaId: number): Promise<CompraNota[]> {
       valorFrete: Number(row.valor_frete),
       valorTotal: Number(row.valor_total),
       observacoes: row.observacoes ? String(row.observacoes) : null,
+      planoContasId: row.plano_contas_id ? Number(row.plano_contas_id) : null,
+      centroCustoId: row.centro_custo_id ? Number(row.centro_custo_id) : null,
+      status: row.status ? String(row.status) : "confirmada",
+      parcelas: row.parcelas ? Number(row.parcelas) : 1,
+      formaPagamento: row.forma_pagamento ? String(row.forma_pagamento) : "boleto",
       criadoEm: String(row.criado_em),
       itens: itensRes.rows.map((iRow) => ({
         id: Number(iRow.id),
@@ -112,6 +123,11 @@ export async function registrarEntradaNota(
     valorTotal: number;
     observacoes?: string;
     arquivoXml?: string;
+    planoContasId?: number | null;
+    centroCustoId?: number | null;
+    parcelas?: number;
+    diasVencimento?: number;
+    formaPagamento?: string;
     itens: CompraItemInput[];
   }
 ) {
@@ -123,14 +139,18 @@ export async function registrarEntradaNota(
   }
 
   const dataEntrada = dados.dataEntrada || new Date().toISOString().split("T")[0];
+  const parcelas = Math.max(1, Number(dados.parcelas || 1));
+  const diasVencimento = Math.max(1, Number(dados.diasVencimento || 30));
+  const formaPagamento = dados.formaPagamento || "boleto";
 
   // 1. Grava cabeçalho da nota
   const insertNota = await db.execute({
     sql: `INSERT INTO tb_compra_nota (
             empresa_id, fornecedor_id, numero_nota, serie_nota, chave_acesso,
             data_emissao, data_entrada, valor_produtos, valor_frete, valor_total,
-            observacoes, arquivo_xml, criado_em
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            observacoes, arquivo_xml, plano_contas_id, centro_custo_id,
+            status, parcelas, dias_vencimento, forma_pagamento, criado_em
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmada', ?, ?, ?, ?)`,
     args: [
       empresaId,
       dados.fornecedorId || null,
@@ -144,6 +164,11 @@ export async function registrarEntradaNota(
       dados.valorTotal,
       dados.observacoes?.trim() || null,
       dados.arquivoXml || null,
+      dados.planoContasId || null,
+      dados.centroCustoId || null,
+      parcelas,
+      diasVencimento,
+      formaPagamento,
       NOW(),
     ],
   });
@@ -192,7 +217,42 @@ export async function registrarEntradaNota(
     }
   }
 
+  // 3. Integração Financeira: Gera automaticamente o(s) título(s) a pagar
+  await gerarTitulosDeCompra(empresaId, compraId, {
+    fornecedorId: dados.fornecedorId || null,
+    numeroNota: dados.numeroNota.trim(),
+    valorTotal: dados.valorTotal,
+    dataEntrada,
+    planoContasId: dados.planoContasId || null,
+    centroCustoId: dados.centroCustoId || null,
+    parcelas,
+    intervaloDias: diasVencimento,
+    formaPagamento,
+  });
+
   return { ok: true, compraId, numeroNota: dados.numeroNota };
+}
+
+/**
+ * Cancelamento/Estorno de Compra: cancela títulos em aberto
+ */
+export async function cancelarCompraNota(empresaId: number, compraId: number) {
+  const notaRes = await db.execute({
+    sql: `SELECT * FROM tb_compra_nota WHERE empresa_id = ? AND id = ?`,
+    args: [empresaId, compraId],
+  });
+  if (!notaRes.rows[0]) return { erro: "Nota fiscal de compra não encontrada." };
+
+  // Atualiza status da nota
+  await db.execute({
+    sql: `UPDATE tb_compra_nota SET status = 'cancelada' WHERE empresa_id = ? AND id = ?`,
+    args: [empresaId, compraId],
+  });
+
+  // Cancela títulos ainda em aberto
+  await cancelarTitulosDeCompra(empresaId, compraId);
+
+  return { ok: true };
 }
 
 /**

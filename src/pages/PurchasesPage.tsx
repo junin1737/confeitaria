@@ -28,15 +28,20 @@ import {
 import {
   fetchCompras,
   saveCompraNota,
+  cancelarCompraApi,
   parseNfeXmlApi,
   fetchFornecedores,
   fetchInsumos,
   fetchProdutos,
+  fetchPlanoContas,
+  fetchCentrosCusto,
   type CompraNota,
   type CompraItem,
   type Fornecedor,
   type Insumo,
   type Produto,
+  type PlanoConta,
+  type CentroCusto,
 } from "../api";
 
 interface PurchasesPageProps {
@@ -48,6 +53,8 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [insumos, setInsumos] = useState<Insumo[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [planoContas, setPlanoContas] = useState<PlanoConta[]>([]);
+  const [centrosCusto, setCentrosCusto] = useState<CentroCusto[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [termoBusca, setTermoBusca] = useState("");
 
@@ -67,13 +74,19 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
   const [observacoes, setObservacoes] = useState("");
   const [arquivoXml, setArquivoXml] = useState<string | null>(null);
 
+  // Campos Financeiros da Nota
+  const [planoContasId, setPlanoContasId] = useState<number | null>(null);
+  const [centroCustoId, setCentroCustoId] = useState<number | null>(null);
+  const [parcelas, setParcelas] = useState<number>(1);
+  const [diasVencimento, setDiasVencimento] = useState<number>(30);
+  const [formaPagamento, setFormaPagamento] = useState<string>("boleto");
+
   // Lista de Itens da Nota Fiscal
   const [itensNota, setItensNota] = useState<CompraItem[]>([]);
 
-  // Item Temporário para Inclusão Manual
-  const [itemTempTipo, setItemTempTipo] = useState<"insumo" | "produto">("insumo");
-  const [itemTempInsumoId, setItemTempInsumoId] = useState<number | null>(null);
-  const [itemTempProdutoId, setItemTempProdutoId] = useState<number | null>(null);
+  // Item Temporário para Inclusão Manual (Permite TODOS os tipos de itens do cadastro)
+  const [itemTempChave, setItemTempChave] = useState<string>("");
+  const [filtroCategoriaItem, setFiltroCategoriaItem] = useState<string>("todas");
   const [itemTempDescricao, setItemTempDescricao] = useState("");
   const [itemTempUnidade, setItemTempUnidade] = useState("un");
   const [itemTempQuantidade, setItemTempQuantidade] = useState<number>(1);
@@ -84,16 +97,20 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
   const carregarDados = async () => {
     try {
       setCarregando(true);
-      const [listaCompras, listaFornec, listaInsumos, listaProds] = await Promise.all([
+      const [listaCompras, listaFornec, listaInsumos, listaProds, listaPlanos, listaCentros] = await Promise.all([
         fetchCompras(),
         fetchFornecedores(),
         fetchInsumos(),
         fetchProdutos(),
+        fetchPlanoContas({ tipo: "despesa", apenasAnaliticas: true, apenasAtivos: true }),
+        fetchCentrosCusto(true),
       ]);
       setCompras(listaCompras);
       setFornecedores(listaFornec);
       setInsumos(listaInsumos);
       setProdutos(listaProds);
+      setPlanoContas(listaPlanos);
+      setCentrosCusto(listaCentros);
     } catch (err: any) {
       onAction("Erro ao carregar compras: " + err.message);
     } finally {
@@ -114,6 +131,57 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
     return valorProdutosTotal + (Number(valorFrete) || 0);
   }, [valorProdutosTotal, valorFrete]);
 
+  // Todos os itens cadastrados (Insumos e Produtos de TODOS os tipos), ordenados estritamente A-Z
+  const itensCadastrados = useMemo(() => {
+    const lista: {
+      chave: string;
+      tipo: "insumo" | "produto";
+      id: number;
+      nome: string;
+      tipoNome: string;
+      unidade: string;
+      custo: number;
+    }[] = [];
+
+    for (const ins of insumos) {
+      lista.push({
+        chave: `insumo:${ins.id}`,
+        tipo: "insumo",
+        id: ins.id,
+        nome: ins.nome,
+        tipoNome: ins.categoria === "embalagem" ? "Embalagem" : "Insumo / Matéria-Prima",
+        unidade: ins.unidadeCompra || "un",
+        custo: Number(ins.precoCompra) || 0,
+      });
+    }
+
+    for (const prod of produtos) {
+      lista.push({
+        chave: `produto:${prod.id}`,
+        tipo: "produto",
+        id: prod.id,
+        nome: prod.nome,
+        tipoNome: prod.tipoItemNome || "Produto Acabado / Mercadoria",
+        unidade: prod.unidadeVenda || "un",
+        custo: Number(prod.precoCusto) || 0,
+      });
+    }
+
+    return lista.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
+  }, [insumos, produtos]);
+
+  // Lista única de categorias para filtro rápido
+  const categoriasDisponiveis = useMemo(() => {
+    return Array.from(new Set(itensCadastrados.map((it) => it.tipoNome))).sort((a, b) =>
+      a.localeCompare(b, "pt-BR", { sensitivity: "base" })
+    );
+  }, [itensCadastrados]);
+
+  const itensFiltradosParaSelecao = useMemo(() => {
+    if (filtroCategoriaItem === "todas") return itensCadastrados;
+    return itensCadastrados.filter((it) => it.tipoNome === filtroCategoriaItem);
+  }, [itensCadastrados, filtroCategoriaItem]);
+
   // Abre modal para nova nota manual ou limpa campos
   const abrirNovaNota = () => {
     setFornecedorId(fornecedores[0]?.id ?? null);
@@ -126,6 +194,16 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
     setObservacoes("");
     setArquivoXml(null);
     setItensNota([]);
+    setPlanoContasId(planoContas[0]?.id ?? null);
+    setCentroCustoId(centrosCusto[0]?.id ?? null);
+    setParcelas(1);
+    setDiasVencimento(30);
+    setFormaPagamento("boleto");
+    setItemTempChave("");
+    setFiltroCategoriaItem("todas");
+    setItemTempDescricao("");
+    setItemTempQuantidade(1);
+    setItemTempValorUnitario(0);
     setErroModal(null);
     setModalAberta(true);
   };
@@ -173,15 +251,16 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
       // Converte e associa itens lidos no XML
       if (parsed.itens && parsed.itens.length > 0) {
         const itensMapeados = parsed.itens.map((it) => {
-          // Tenta associar por similaridade de nome com insumos existentes
+          // Tenta associar por similaridade de nome com insumos ou produtos existentes
           const descLower = it.descricao.toLowerCase();
-          const insumoMatch = insumos.find((ins) =>
-            descLower.includes(ins.nome.toLowerCase()) || ins.nome.toLowerCase().includes(descLower)
+          const matchItem = itensCadastrados.find((cad) =>
+            descLower.includes(cad.nome.toLowerCase()) || cad.nome.toLowerCase().includes(descLower)
           );
 
           return {
             ...it,
-            insumoId: insumoMatch ? insumoMatch.id : null,
+            insumoId: matchItem?.tipo === "insumo" ? matchItem.id : null,
+            produtoId: matchItem?.tipo === "produto" ? matchItem.id : null,
           };
         });
 
@@ -211,11 +290,20 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
       return;
     }
 
-    const valorTotal = itemTempQuantidade * itemTempValorUnitario;
+    const valorTotal = Math.round(itemTempQuantidade * itemTempValorUnitario * 100) / 100;
+
+    let insId: number | null = null;
+    let prodId: number | null = null;
+
+    if (itemTempChave) {
+      const [tipo, idStr] = itemTempChave.split(":");
+      if (tipo === "insumo") insId = Number(idStr);
+      if (tipo === "produto") prodId = Number(idStr);
+    }
 
     const novoItem: CompraItem = {
-      insumoId: itemTempTipo === "insumo" ? itemTempInsumoId : null,
-      produtoId: itemTempTipo === "produto" ? itemTempProdutoId : null,
+      insumoId: insId,
+      produtoId: prodId,
       descricao: itemTempDescricao.trim(),
       unidade: itemTempUnidade,
       quantidade: itemTempQuantidade,
@@ -226,11 +314,10 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
     setItensNota([...itensNota, novoItem]);
 
     // Reseta inputs do item
+    setItemTempChave("");
     setItemTempDescricao("");
     setItemTempQuantidade(1);
     setItemTempValorUnitario(0);
-    setItemTempInsumoId(null);
-    setItemTempProdutoId(null);
   };
 
   // Remove um item da tabela do modal
@@ -279,16 +366,39 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
         valorTotal: valorNotaTotal,
         observacoes: observacoes.trim() || null,
         arquivoXml,
+        planoContasId: planoContasId || null,
+        centroCustoId: centroCustoId || null,
+        parcelas,
+        diasVencimento,
+        formaPagamento,
         itens: itensNota,
       });
 
-      onAction(`Entrada da NF ${numeroNota} gravada com sucesso! Estoque atualizado.`);
+      onAction(`Entrada da NF ${numeroNota} gravada com sucesso! Títulos a pagar gerados automaticamente.`);
       setModalAberta(false);
       await carregarDados();
     } catch (err: any) {
       setErroModal(err.message || "Erro ao salvar entrada de nota fiscal.");
     } finally {
       setSalvando(false);
+    }
+  };
+
+  // Cancelamento de nota de compra
+  const handleCancelarNota = async (compra: CompraNota) => {
+    if (
+      !confirm(
+        `Deseja realmente estornar/cancelar a entrada da Nota Fiscal #${compra.numeroNota}? Todos os títulos a pagar em aberto vinculados a ela serão cancelados.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await cancelarCompraApi(compra.id);
+      onAction(`Nota Fiscal #${compra.numeroNota} cancelada com sucesso! Títulos a pagar em aberto foram cancelados.`);
+      await carregarDados();
+    } catch (err: any) {
+      onAction("Erro ao cancelar nota: " + err.message);
     }
   };
 
@@ -475,43 +585,87 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
                   <th style={{ padding: "0.75rem" }}>Data Entrada</th>
                   <th style={{ padding: "0.75rem" }}>Fornecedor</th>
                   <th style={{ padding: "0.75rem", textAlign: "right" }}>Valor Total</th>
+                  <th style={{ padding: "0.75rem" }}>Status</th>
                   <th style={{ padding: "0.75rem" }}>Itens Recebidos</th>
+                  <th style={{ padding: "0.75rem", textAlign: "center" }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {comprasFiltradas.map((c) => (
-                  <tr key={c.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                    <td style={{ padding: "0.75rem", fontWeight: 700, color: "#2563eb" }}>
-                      #{c.id}
-                    </td>
-                    <td style={{ padding: "0.75rem", fontWeight: 700, color: "#1e293b" }}>
-                      NF-e {c.numeroNota} {c.serieNota ? `(Série ${c.serieNota})` : ""}
-                    </td>
-                    <td style={{ padding: "0.75rem", color: "#64748b" }}>
-                      {c.dataEntrada ? new Date(c.dataEntrada + "T00:00:00").toLocaleDateString("pt-BR") : "-"}
-                    </td>
-                    <td style={{ padding: "0.75rem", color: "#334155" }}>
-                      {c.fornecedorNome || c.fornecedorFantasia || "Fornecedor não vinculado"}
-                    </td>
-                    <td style={{ padding: "0.75rem", textAlign: "right", fontWeight: 700, color: "#16a34a" }}>
-                      R$ {Number(c.valorTotal || 0).toFixed(2)}
-                    </td>
-                    <td style={{ padding: "0.75rem" }}>
-                      <details style={{ cursor: "pointer" }}>
-                        <summary style={{ fontSize: "0.8rem", color: "#2563eb", fontWeight: 600 }}>
-                          Ver {c.itens.length} itens da nota
-                        </summary>
-                        <ul style={{ margin: "0.5rem 0 0 0", paddingLeft: "1.25rem", fontSize: "0.8rem", color: "#475569" }}>
-                          {c.itens.map((it, idx) => (
-                            <li key={idx}>
-                              {it.descricao}: <strong>+{Number(it.quantidade).toFixed(2)} {it.unidade}</strong> (R$ {Number(it.valorTotal).toFixed(2)})
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    </td>
-                  </tr>
-                ))}
+                {comprasFiltradas.map((c) => {
+                  const isCancelada = c.status === "cancelado";
+                  return (
+                    <tr key={c.id} style={{ borderBottom: "1px solid #f1f5f9", opacity: isCancelada ? 0.6 : 1 }}>
+                      <td style={{ padding: "0.75rem", fontWeight: 700, color: "#2563eb" }}>
+                        #{c.id}
+                      </td>
+                      <td style={{ padding: "0.75rem", fontWeight: 700, color: "#1e293b" }}>
+                        NF-e {c.numeroNota} {c.serieNota ? `(Série ${c.serieNota})` : ""}
+                      </td>
+                      <td style={{ padding: "0.75rem", color: "#64748b" }}>
+                        {c.dataEntrada ? new Date(c.dataEntrada + "T00:00:00").toLocaleDateString("pt-BR") : "-"}
+                      </td>
+                      <td style={{ padding: "0.75rem", color: "#334155" }}>
+                        {c.fornecedorNome || c.fornecedorFantasia || "Fornecedor não vinculado"}
+                      </td>
+                      <td style={{ padding: "0.75rem", textAlign: "right", fontWeight: 700, color: isCancelada ? "#64748b" : "#16a34a" }}>
+                        R$ {Number(c.valorTotal || 0).toFixed(2)}
+                      </td>
+                      <td style={{ padding: "0.75rem" }}>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "0.2rem 0.6rem",
+                            borderRadius: 9999,
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            background: isCancelada ? "#fee2e2" : "#dcfce7",
+                            color: isCancelada ? "#b91c1c" : "#15803d",
+                          }}
+                        >
+                          {isCancelada ? "Cancelada / Estornada" : "Confirmada"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "0.75rem" }}>
+                        <details style={{ cursor: "pointer" }}>
+                          <summary style={{ fontSize: "0.8rem", color: "#2563eb", fontWeight: 600 }}>
+                            Ver {c.itens.length} itens da nota
+                          </summary>
+                          <ul style={{ margin: "0.5rem 0 0 0", paddingLeft: "1.25rem", fontSize: "0.8rem", color: "#475569" }}>
+                            {c.itens.map((it, idx) => (
+                              <li key={idx}>
+                                {it.descricao}: <strong>+{Number(it.quantidade).toFixed(2)} {it.unidade}</strong> (R$ {Number(it.valorTotal).toFixed(2)})
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      </td>
+                      <td style={{ padding: "0.75rem", textAlign: "center" }}>
+                        {!isCancelada && (
+                          <button
+                            type="button"
+                            onClick={() => handleCancelarNota(c)}
+                            title="Cancelar/Estornar entrada de nota e títulos em aberto"
+                            style={{
+                              padding: "0.35rem 0.65rem",
+                              borderRadius: 6,
+                              border: "1px solid #fca5a5",
+                              background: "#fef2f2",
+                              color: "#dc2626",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.3rem",
+                            }}
+                          >
+                            <X size={14} /> Cancelar Nota
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -762,72 +916,162 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
                 </div>
               </div>
 
-              {/* INCLUSÃO MANUAL DE ITEM */}
-              <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: "1rem", background: "#f8fafc", marginBottom: "1.25rem" }}>
-                <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1e293b", display: "block", marginBottom: "0.75rem" }}>
-                  Adicionar Item à Nota Fiscal
-                </span>
+              {/* CLASSIFICAÇÃO FINANCEIRA & CONTAS A PAGAR */}
+              <div
+                style={{
+                  border: "1px solid #bfdbfe",
+                  borderRadius: 12,
+                  background: "#f0fdf4",
+                  padding: "1rem",
+                  marginBottom: "1.25rem",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                  <DollarSign size={18} style={{ color: "#16a34a" }} />
+                  <strong style={{ fontSize: "0.9rem", color: "#166534" }}>
+                    Integração com Contas a Pagar (Geração Automática de Títulos)
+                  </strong>
+                </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1.5fr 2fr 1fr 1fr 1fr auto", gap: "0.75rem", alignItems: "flex-end" }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                    gap: "0.75rem",
+                  }}
+                >
                   <div>
-                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>Vincular a</label>
+                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
+                      Plano de Contas (Despesa) *
+                    </label>
                     <select
-                      value={itemTempTipo}
-                      onChange={(e) => setItemTempTipo(e.target.value as any)}
-                      style={{ width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                      value={planoContasId ?? ""}
+                      onChange={(e) => setPlanoContasId(e.target.value ? Number(e.target.value) : null)}
+                      style={{ width: "100%", padding: "0.55rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#fff" }}
                     >
-                      <option value="insumo">Insumo (Matéria-Prima)</option>
-                      <option value="produto">Produto (Revenda)</option>
+                      <option value="">Selecione a conta analítica...</option>
+                      {planoContas.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.codigo} - {c.nome}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
                   <div>
-                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>Item do Cadastro</label>
-                    {itemTempTipo === "insumo" ? (
-                      <select
-                        value={itemTempInsumoId ?? ""}
-                        onChange={(e) => {
-                          const val = e.target.value ? Number(e.target.value) : null;
-                          setItemTempInsumoId(val);
-                          const ins = insumos.find((i) => i.id === val);
-                          if (ins) {
-                            setItemTempDescricao(ins.nome);
-                            setItemTempUnidade(ins.unidadeCompra || "un");
-                            setItemTempValorUnitario(Number(ins.precoCompra) || 0);
-                          }
-                        }}
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                      >
-                        <option value="">Selecione um insumo...</option>
-                        {insumos.map((i) => (
-                          <option key={i.id} value={i.id}>
-                            {i.nome} ({i.unidadeCompra})
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <select
-                        value={itemTempProdutoId ?? ""}
-                        onChange={(e) => {
-                          const val = e.target.value ? Number(e.target.value) : null;
-                          setItemTempProdutoId(val);
-                          const prod = produtos.find((p) => p.id === val);
-                          if (prod) {
-                            setItemTempDescricao(prod.nome);
-                            setItemTempUnidade(prod.unidadeVenda || "un");
-                            setItemTempValorUnitario(Number(prod.precoCusto) || 0);
-                          }
-                        }}
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                      >
-                        <option value="">Selecione um produto...</option>
-                        {produtos.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.nome} ({p.unidadeVenda})
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
+                      Centro de Custo
+                    </label>
+                    <select
+                      value={centroCustoId ?? ""}
+                      onChange={(e) => setCentroCustoId(e.target.value ? Number(e.target.value) : null)}
+                      style={{ width: "100%", padding: "0.55rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#fff" }}
+                    >
+                      <option value="">Nenhum / Não categorizado</option>
+                      {centrosCusto.map((cc) => (
+                        <option key={cc.id} value={cc.id}>
+                          {cc.codigo ? `${cc.codigo} - ` : ""}{cc.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
+                      Forma de Pagamento
+                    </label>
+                    <select
+                      value={formaPagamento}
+                      onChange={(e) => setFormaPagamento(e.target.value)}
+                      style={{ width: "100%", padding: "0.55rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#fff" }}
+                    >
+                      <option value="boleto">Boleto Bancário</option>
+                      <option value="pix">PIX</option>
+                      <option value="transferencia">Transferência Bancária</option>
+                      <option value="dinheiro">Dinheiro / Caixa</option>
+                      <option value="cartao_credito">Cartão de Crédito</option>
+                      <option value="outros">Outros</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
+                      Parcelas
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={72}
+                      value={parcelas}
+                      onChange={(e) => setParcelas(Math.max(1, Number(e.target.value)))}
+                      style={{ width: "100%", padding: "0.55rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#fff" }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
+                      1º Vencimento (Dias)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={diasVencimento}
+                      onChange={(e) => setDiasVencimento(Number(e.target.value))}
+                      style={{ width: "100%", padding: "0.55rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#fff" }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* INCLUSÃO MANUAL DE ITEM - PERMITE TODOS OS TIPOS DE ITENS CADASTRADOS ORDENADOS A-Z */}
+              <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: "1rem", background: "#f8fafc", marginBottom: "1.25rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1e293b" }}>
+                    Adicionar Item à Nota Fiscal
+                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ fontSize: "0.75rem", color: "#64748b" }}>Filtrar Tipo:</span>
+                    <select
+                      value={filtroCategoriaItem}
+                      onChange={(e) => setFiltroCategoriaItem(e.target.value)}
+                      style={{ padding: "0.25rem 0.5rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.75rem", background: "#fff" }}
+                    >
+                      <option value="todas">Todos os tipos de item ({itensCadastrados.length})</option>
+                      {categoriasDisponiveis.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "2.5fr 1fr 1fr 1fr auto", gap: "0.75rem", alignItems: "flex-end" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>
+                      Item Cadastrado (Ordem A–Z, todos os tipos)
+                    </label>
+                    <select
+                      value={itemTempChave}
+                      onChange={(e) => {
+                        const chave = e.target.value;
+                        setItemTempChave(chave);
+                        const selecionado = itensCadastrados.find((it) => it.chave === chave);
+                        if (selecionado) {
+                          setItemTempDescricao(selecionado.nome);
+                          setItemTempUnidade(selecionado.unidade);
+                          setItemTempValorUnitario(selecionado.custo);
+                        }
+                      }}
+                      style={{ width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#fff" }}
+                    >
+                      <option value="">Selecione um item ou digite descrição...</option>
+                      {itensFiltradosParaSelecao.map((it) => (
+                        <option key={it.chave} value={it.chave}>
+                          [{it.tipoNome}] {it.nome} ({it.unidade})
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
@@ -838,7 +1082,7 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
                       min="0.01"
                       value={itemTempQuantidade}
                       onChange={(e) => setItemTempQuantidade(Number(e.target.value))}
-                      style={{ width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                      style={{ width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#fff" }}
                     />
                   </div>
 
@@ -849,7 +1093,7 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
                       step="0.01"
                       value={itemTempValorUnitario}
                       onChange={(e) => setItemTempValorUnitario(Number(e.target.value))}
-                      style={{ width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                      style={{ width: "100%", padding: "0.5rem", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#fff" }}
                     />
                   </div>
 
@@ -923,24 +1167,21 @@ export function PurchasesPage({ onAction }: PurchasesPageProps) {
                                   borderRadius: 4,
                                   border: "1px solid #cbd5e1",
                                   fontSize: "0.8rem",
-                                  maxWidth: 220,
+                                  maxWidth: 240,
                                 }}
                               >
                                 <option value="">Sem vínculo (apenas despesa)</option>
-                                <optgroup label="Matérias-Primas / Insumos">
-                                  {insumos.map((i) => (
-                                    <option key={`insumo:${i.id}`} value={`insumo:${i.id}`}>
-                                      [Insumo] {i.nome}
-                                    </option>
-                                  ))}
-                                </optgroup>
-                                <optgroup label="Produtos Acabados">
-                                  {produtos.map((p) => (
-                                    <option key={`produto:${p.id}`} value={`produto:${p.id}`}>
-                                      [Produto] {p.nome}
-                                    </option>
-                                  ))}
-                                </optgroup>
+                                {categoriasDisponiveis.map((cat) => (
+                                  <optgroup key={cat} label={cat}>
+                                    {itensCadastrados
+                                      .filter((it) => it.tipoNome === cat)
+                                      .map((it) => (
+                                        <option key={it.chave} value={it.chave}>
+                                          {it.nome} ({it.unidade})
+                                        </option>
+                                      ))}
+                                  </optgroup>
+                                ))}
                               </select>
                             </td>
                             <td style={{ padding: "0.5rem", textAlign: "right" }}>

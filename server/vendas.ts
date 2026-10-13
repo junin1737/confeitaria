@@ -12,6 +12,7 @@
  */
 
 import { db } from "./db/client";
+import { gerarTitulosDePedido, cancelarTitulosDePedido } from "./financeiro";
 
 const NOW = () => new Date().toISOString();
 
@@ -38,6 +39,8 @@ export type PedidoInput = {
   valorDesconto?: number;
   taxaEntrega?: number;
   valorSinal?: number;
+  planoContasId?: number | null;
+  centroCustoId?: number | null;
   observacoes?: string | null;
   enderecoEntrega?: string | null;
   itens: PedidoItemInput[];
@@ -62,6 +65,8 @@ export type PedidoDetalhado = {
   valorSinal: number;
   valorTotal: number;
   valorRestante: number;
+  planoContasId?: number | null;
+  centroCustoId?: number | null;
   observacoes: string | null;
   enderecoEntrega: string | null;
   criadoEm: string;
@@ -171,6 +176,8 @@ export async function listarPedidos(
       valorRestante,
       observacoes: row.observacoes ? String(row.observacoes) : null,
       enderecoEntrega: row.endereco_entrega ? String(row.endereco_entrega) : null,
+      planoContasId: row.plano_contas_id ? Number(row.plano_contas_id) : null,
+      centroCustoId: row.centro_custo_id ? Number(row.centro_custo_id) : null,
       criadoEm: String(row.criado_em),
       atualizadoEm: String(row.atualizado_em),
       itens: itensRes.rows.map((iRow) => ({
@@ -229,8 +236,8 @@ export async function salvarPedido(empresaId: number, dados: PedidoInput) {
             SET cliente_id = ?, data_pedido = ?, data_entrega = ?, hora_entrega = ?,
                 tipo = ?, status = ?, forma_pagamento = ?, status_pagamento = ?,
                 valor_produtos = ?, valor_desconto = ?, taxa_entrega = ?,
-                valor_sinal = ?, valor_total = ?, observacoes = ?,
-                endereco_entrega = ?, atualizado_em = ?
+                valor_sinal = ?, valor_total = ?, plano_contas_id = ?, centro_custo_id = ?,
+                observacoes = ?, endereco_entrega = ?, atualizado_em = ?
             WHERE empresa_id = ? AND id = ?`,
       args: [
         dados.clienteId || null,
@@ -246,6 +253,8 @@ export async function salvarPedido(empresaId: number, dados: PedidoInput) {
         taxaEntrega,
         sinal,
         valorTotal,
+        dados.planoContasId || null,
+        dados.centroCustoId || null,
         dados.observacoes?.trim() || null,
         dados.enderecoEntrega?.trim() || null,
         agora,
@@ -266,9 +275,9 @@ export async function salvarPedido(empresaId: number, dados: PedidoInput) {
       sql: `INSERT INTO tb_pedido (
               empresa_id, codigo, cliente_id, data_pedido, data_entrega, hora_entrega,
               tipo, status, forma_pagamento, status_pagamento, valor_produtos,
-              valor_desconto, taxa_entrega, valor_sinal, valor_total, observacoes,
-              endereco_entrega, criado_em, atualizado_em
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              valor_desconto, taxa_entrega, valor_sinal, valor_total, plano_contas_id, centro_custo_id,
+              observacoes, endereco_entrega, criado_em, atualizado_em
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         empresaId,
         codigo,
@@ -285,6 +294,8 @@ export async function salvarPedido(empresaId: number, dados: PedidoInput) {
         taxaEntrega,
         sinal,
         valorTotal,
+        dados.planoContasId || null,
+        dados.centroCustoId || null,
         dados.observacoes?.trim() || null,
         dados.enderecoEntrega?.trim() || null,
         agora,
@@ -320,6 +331,25 @@ export async function salvarPedido(empresaId: number, dados: PedidoInput) {
     }
   }
 
+  // Integração com Contas a Receber
+  if (dados.status === "cancelado") {
+    await cancelarTitulosDePedido(empresaId, pedidoId);
+  } else if (dados.status && dados.status !== "pendente" || dados.tipo === "balcao") {
+    // Pedido aprovado ou iniciado produção/entregue
+    const codPed = dados.codigo || (await proximoCodigoPedido(empresaId));
+    await gerarTitulosDePedido(empresaId, pedidoId, {
+      clienteId: dados.clienteId || null,
+      codigo: codPed,
+      valorTotal,
+      valorSinal: sinal,
+      dataPedido: dados.dataPedido || agora.split("T")[0],
+      dataEntrega: dados.dataEntrega || null,
+      planoContasId: dados.planoContasId || null,
+      centroCustoId: dados.centroCustoId || null,
+      formaPagamento: dados.formaPagamento || "dinheiro",
+    });
+  }
+
   return { id: pedidoId, ok: true };
 }
 
@@ -335,6 +365,31 @@ export async function alterarStatusPedido(
     sql: `UPDATE tb_pedido SET status = ?, atualizado_em = ? WHERE empresa_id = ? AND id = ?`,
     args: [novoStatus, NOW(), empresaId, pedidoId],
   });
+
+  // Integração Financeira: ao aprovar / iniciar produção, gera títulos; ao cancelar, cancela em aberto
+  if (novoStatus === "cancelado") {
+    await cancelarTitulosDePedido(empresaId, pedidoId);
+  } else if (novoStatus === "em_producao" || novoStatus === "pronto" || novoStatus === "entregue") {
+    const pedRes = await db.execute({
+      sql: `SELECT * FROM tb_pedido WHERE empresa_id = ? AND id = ?`,
+      args: [empresaId, pedidoId],
+    });
+    const p = pedRes.rows[0];
+    if (p) {
+      await gerarTitulosDePedido(empresaId, pedidoId, {
+        clienteId: p.cliente_id ? Number(p.cliente_id) : null,
+        codigo: String(p.codigo),
+        valorTotal: Number(p.valor_total || 0),
+        valorSinal: Number(p.valor_sinal || 0),
+        dataPedido: String(p.data_pedido),
+        dataEntrega: p.data_entrega ? String(p.data_entrega) : null,
+        planoContasId: p.plano_contas_id ? Number(p.plano_contas_id) : null,
+        centroCustoId: p.centro_custo_id ? Number(p.centro_custo_id) : null,
+        formaPagamento: p.forma_pagamento ? String(p.forma_pagamento) : "dinheiro",
+      });
+    }
+  }
+
   return { ok: true };
 }
 

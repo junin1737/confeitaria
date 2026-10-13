@@ -416,6 +416,125 @@ const STATEMENTS = [
     observacoes TEXT
   )`,
 
+  // 30. Módulo Financeiro: tb_plano_contas (Estrutura hierárquica contábil/gerencial)
+  `CREATE TABLE IF NOT EXISTS tb_plano_contas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    codigo TEXT NOT NULL,
+    nome TEXT NOT NULL,
+    tipo TEXT NOT NULL, -- 'receita' | 'despesa'
+    conta_pai_id INTEGER REFERENCES tb_plano_contas(id),
+    tipo_conta TEXT NOT NULL DEFAULT 'analitica', -- 'sintetica' | 'analitica'
+    ativo INTEGER NOT NULL DEFAULT 1,
+    criado_em TEXT NOT NULL,
+    UNIQUE (empresa_id, codigo)
+  )`,
+
+  // 31. Módulo Financeiro: tb_centro_custo (Departamentos e centros de resultado)
+  `CREATE TABLE IF NOT EXISTS tb_centro_custo (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    codigo TEXT NOT NULL,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    ativo INTEGER NOT NULL DEFAULT 1,
+    criado_em TEXT NOT NULL,
+    UNIQUE (empresa_id, codigo)
+  )`,
+
+  // 32. Módulo Financeiro: tb_conta_bancaria (Contas correntes, digitais e carteiras)
+  `CREATE TABLE IF NOT EXISTS tb_conta_bancaria (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    banco TEXT NOT NULL,
+    agencia TEXT,
+    conta TEXT NOT NULL,
+    tipo TEXT NOT NULL DEFAULT 'corrente', -- 'corrente' | 'poupanca' | 'pagamento' | 'investimento'
+    saldo_inicial REAL NOT NULL DEFAULT 0,
+    ativo INTEGER NOT NULL DEFAULT 1,
+    criado_em TEXT NOT NULL
+  )`,
+
+  // 33. Módulo Financeiro: tb_caixa (Abertura, fechamento e controle por operador/turno)
+  `CREATE TABLE IF NOT EXISTS tb_caixa (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    usuario_id INTEGER NOT NULL REFERENCES tb_usuario(id),
+    data_abertura TEXT NOT NULL,
+    saldo_inicial REAL NOT NULL DEFAULT 0,
+    data_fechamento TEXT,
+    saldo_informado REAL,
+    saldo_calculado REAL,
+    diferenca REAL,
+    status TEXT NOT NULL DEFAULT 'aberto', -- 'aberto' | 'fechado'
+    observacoes TEXT,
+    criado_em TEXT NOT NULL
+  )`,
+
+  // 34. Módulo Financeiro: tb_titulo_pagar (Contas a Pagar e obrigações com fornecedores)
+  `CREATE TABLE IF NOT EXISTS tb_titulo_pagar (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    fornecedor_id INTEGER REFERENCES tb_fornecedor(id),
+    compra_id INTEGER REFERENCES tb_compra_nota(id) ON DELETE SET NULL,
+    descricao TEXT NOT NULL,
+    plano_contas_id INTEGER NOT NULL REFERENCES tb_plano_contas(id),
+    centro_custo_id INTEGER REFERENCES tb_centro_custo(id),
+    valor_original REAL NOT NULL,
+    valor_pago REAL NOT NULL DEFAULT 0,
+    vencimento TEXT NOT NULL,
+    numero_parcela INTEGER NOT NULL DEFAULT 1,
+    total_parcelas INTEGER NOT NULL DEFAULT 1,
+    forma_pagamento TEXT DEFAULT 'boleto',
+    status TEXT NOT NULL DEFAULT 'aberto', -- 'aberto' | 'pago_parcial' | 'pago' | 'cancelado'
+    data_pagamento TEXT,
+    observacoes TEXT,
+    criado_em TEXT NOT NULL
+  )`,
+
+  // 35. Módulo Financeiro: tb_titulo_receber (Contas a Receber e direitos de clientes)
+  `CREATE TABLE IF NOT EXISTS tb_titulo_receber (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    cliente_id INTEGER REFERENCES tb_cliente(id),
+    pedido_id INTEGER REFERENCES tb_pedido(id) ON DELETE SET NULL,
+    descricao TEXT NOT NULL,
+    plano_contas_id INTEGER NOT NULL REFERENCES tb_plano_contas(id),
+    centro_custo_id INTEGER REFERENCES tb_centro_custo(id),
+    valor_original REAL NOT NULL,
+    valor_recebido REAL NOT NULL DEFAULT 0,
+    vencimento TEXT NOT NULL,
+    numero_parcela INTEGER NOT NULL DEFAULT 1,
+    total_parcelas INTEGER NOT NULL DEFAULT 1,
+    forma_pagamento TEXT DEFAULT 'pix',
+    status TEXT NOT NULL DEFAULT 'aberto', -- 'aberto' | 'pago_parcial' | 'pago' | 'cancelado'
+    data_recebimento TEXT,
+    observacoes TEXT,
+    criado_em TEXT NOT NULL
+  )`,
+
+  // 36. Módulo Financeiro: tb_movimentacao_financeira (Extrato consolidado de caixa e bancos)
+  `CREATE TABLE IF NOT EXISTS tb_movimentacao_financeira (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    empresa_id INTEGER NOT NULL REFERENCES tb_empresa(id),
+    tipo TEXT NOT NULL, -- 'receita' | 'despesa' | 'transferencia'
+    origem TEXT NOT NULL, -- 'nota' | 'pedido' | 'manual' | 'sangria' | 'suprimento' | 'transferencia' | 'baixa_titulo'
+    titulo_pagar_id INTEGER REFERENCES tb_titulo_pagar(id),
+    titulo_receber_id INTEGER REFERENCES tb_titulo_receber(id),
+    caixa_id INTEGER REFERENCES tb_caixa(id),
+    conta_bancaria_id INTEGER REFERENCES tb_conta_bancaria(id),
+    conta_bancaria_destino_id INTEGER REFERENCES tb_conta_bancaria(id),
+    plano_contas_id INTEGER REFERENCES tb_plano_contas(id),
+    centro_custo_id INTEGER REFERENCES tb_centro_custo(id),
+    valor REAL NOT NULL,
+    juros_multa REAL NOT NULL DEFAULT 0,
+    desconto REAL NOT NULL DEFAULT 0,
+    valor_liquido REAL NOT NULL,
+    data_movimento TEXT NOT NULL,
+    descricao TEXT NOT NULL,
+    criado_em TEXT NOT NULL
+  )`,
+
   `CREATE INDEX IF NOT EXISTS idx_producao_empresa ON tb_producao (empresa_id)`,
   `CREATE INDEX IF NOT EXISTS idx_compra_nota_empresa ON tb_compra_nota (empresa_id)`,
   `CREATE INDEX IF NOT EXISTS idx_unidade_medida_empresa ON tb_unidade_medida (empresa_id)`,
@@ -424,6 +543,26 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_pedido_data ON tb_pedido (data_pedido)`,
   `CREATE INDEX IF NOT EXISTS idx_pedido_status ON tb_pedido (status)`,
   `CREATE INDEX IF NOT EXISTS idx_pedido_item_pedido ON tb_pedido_item (pedido_id)`,
+
+  // Índices financeiros
+  `CREATE INDEX IF NOT EXISTS idx_plano_contas_empresa ON tb_plano_contas (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_plano_contas_pai ON tb_plano_contas (conta_pai_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_centro_custo_empresa ON tb_centro_custo (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_conta_bancaria_empresa ON tb_conta_bancaria (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_caixa_empresa ON tb_caixa (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_caixa_usuario ON tb_caixa (usuario_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_titulo_pagar_empresa ON tb_titulo_pagar (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_titulo_pagar_compra ON tb_titulo_pagar (compra_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_titulo_pagar_status ON tb_titulo_pagar (status)`,
+  `CREATE INDEX IF NOT EXISTS idx_titulo_pagar_vencimento ON tb_titulo_pagar (vencimento)`,
+  `CREATE INDEX IF NOT EXISTS idx_titulo_receber_empresa ON tb_titulo_receber (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_titulo_receber_pedido ON tb_titulo_receber (pedido_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_titulo_receber_status ON tb_titulo_receber (status)`,
+  `CREATE INDEX IF NOT EXISTS idx_titulo_receber_vencimento ON tb_titulo_receber (vencimento)`,
+  `CREATE INDEX IF NOT EXISTS idx_mov_fin_empresa ON tb_movimentacao_financeira (empresa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_mov_fin_caixa ON tb_movimentacao_financeira (caixa_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_mov_fin_banco ON tb_movimentacao_financeira (conta_bancaria_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_mov_fin_data ON tb_movimentacao_financeira (data_movimento)`,
 ];
 
 /**
@@ -498,4 +637,16 @@ export async function migrate() {
 
   // Migrações incrementais na tabela de produtos (vínculo com tipo de item)
   await ensureColumn("tb_produto", "tipo_item_id", "INTEGER REFERENCES tb_tipo_item(id)");
+
+  // Migrações incrementais em Compras / Entrada de Nota (integração financeira)
+  await ensureColumn("tb_compra_nota", "plano_contas_id", "INTEGER REFERENCES tb_plano_contas(id)");
+  await ensureColumn("tb_compra_nota", "centro_custo_id", "INTEGER REFERENCES tb_centro_custo(id)");
+  await ensureColumn("tb_compra_nota", "status", "TEXT DEFAULT 'confirmada'");
+  await ensureColumn("tb_compra_nota", "parcelas", "INTEGER DEFAULT 1");
+  await ensureColumn("tb_compra_nota", "dias_vencimento", "INTEGER DEFAULT 30");
+  await ensureColumn("tb_compra_nota", "forma_pagamento", "TEXT DEFAULT 'boleto'");
+
+  // Migrações incrementais em Pedidos / Vendas (integração financeira)
+  await ensureColumn("tb_pedido", "plano_contas_id", "INTEGER REFERENCES tb_plano_contas(id)");
+  await ensureColumn("tb_pedido", "centro_custo_id", "INTEGER REFERENCES tb_centro_custo(id)");
 }

@@ -15,7 +15,7 @@
  */
 
 import { useState, type FormEvent } from "react";
-import { ArrowRight, Cake, Eye, EyeOff, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
 import { loginRequest, registrarConfeitariaApi, type UsuarioSessao } from "../api";
 
 export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao) => void }) {

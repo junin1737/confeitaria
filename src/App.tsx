@@ -52,6 +52,7 @@ import { SuppliersPage } from "./pages/SuppliersPage";
 import { ProductionPage } from "./pages/ProductionPage";
 import { PurchasesPage } from "./pages/PurchasesPage";
 import { OrdersPage } from "./pages/OrdersPage";
+import { FinancialPage } from "./pages/FinancialPage";
 import { fetchMe, iniciais, logoutRequest, type UsuarioSessao } from "./api";
 import { LoginPage } from "./pages/LoginPage";
 import { applyTheme, loadSavedTheme, saveTheme, type ThemeColors } from "./theme";
@@ -304,6 +305,7 @@ export default function App() {
           {page === "clientes" ? <CustomersPage onAction={notify} /> : null}
           {page === "fornecedores" ? <SuppliersPage onAction={notify} /> : null}
           {page === "funcionarios" ? <EmployeesPage onAction={notify} /> : null}
+          {page === "financeiro" ? <FinancialPage onAction={notify} /> : null}
           {page === "configuracoes" ? (
             <SettingsPage colors={colors} onColorsChange={setColors} onAction={notify} />
           ) : null}
@@ -317,7 +319,8 @@ export default function App() {
           page !== "compras" &&
           page !== "estoque" &&
           page !== "clientes" &&
-          page !== "fornecedores" ? (
+          page !== "fornecedores" &&
+          page !== "financeiro" ? (
             <PlaceholderPage
               iconKey={page}
               title={PLACEHOLDERS[page].title}
