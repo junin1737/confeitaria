@@ -15,7 +15,7 @@
  */
 
 import { useState, type FormEvent } from "react";
-import { ArrowRight, Eye, EyeOff, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, ShieldCheck, UserPlus } from "lucide-react";
 import { loginRequest, registrarConfeitariaApi, type UsuarioSessao } from "../api";
 
 export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao) => void }) {
@@ -201,7 +201,7 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
               required
               value={login}
               onChange={(event) => setLogin(event.target.value)}
-              placeholder={modo === "cadastro" ? "seuemail@exemplo.com" : "seuemail@exemplo.com ou Master"}
+              placeholder="seuemail@exemplo.com"
             />
           </label>
 
@@ -274,23 +274,8 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
           </button>
 
           {modo === "login" ? (
-            <>
-              <div className="login-divider">
-                <span>Ou</span>
-              </div>
-
-              <button
-                type="button"
-                className="button secondary login-submit"
-                disabled={loading}
-                onClick={() => void entrar("Master", "1737")}
-              >
-                <Sparkles size={16} />
-                Entrar como Master
-              </button>
-
-              <p className="login-signup">
-                Ainda não tem conta?{" "}
+            <p className="login-signup">
+              Ainda não tem conta?{" "}
                 <button
                   type="button"
                   style={{ background: "none", border: "none", color: "var(--color-primary, #b33951)", fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
@@ -302,7 +287,6 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
                   Criar conta grátis
                 </button>
               </p>
-            </>
           ) : (
             <p className="login-signup">
               Já possui uma conta?{" "}
