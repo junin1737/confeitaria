@@ -216,7 +216,14 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
         unidade: it.unidade,
       })) || []
     );
-    setFormError("");
+    // Se não for produto acabado e estiver na aba de receita, volta para a aba de dados
+    const tSel = tiposItem.find((t) => t.id === p.tipoItemId);
+    const ehAcabado = tSel
+      ? tSel.codigo === "4" || tSel.nome.toLowerCase().includes("acabado")
+      : p.temReceita;
+    if (!ehAcabado && formTab === "receita") {
+      setFormTab("dados");
+    }
 
     // Carrega histórico de evolução de custos
     carregarHistorico(p.id);
@@ -258,25 +265,39 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     setFormError("");
   };
 
-  // Cálculos dinâmicos em tempo real no formulário
-  const custoInsumosForm = formItensReceita.reduce((acc, it) => {
-    const ins = insumos.find((i) => i.id === Number(it.insumoId));
-    if (!ins) return acc;
-    return acc + Number(it.quantidade) * Number(ins.custoUnitario);
-  }, 0);
+  // Classificação do produto: Ficha Técnica e Receita são exclusivas de Produtos Acabados
+  const tipoItemSelecionado = tiposItem.find((t) => t.id === formTipoItemId);
+  const isProdutoAcabado = tipoItemSelecionado
+    ? tipoItemSelecionado.codigo === "4" || tipoItemSelecionado.nome.toLowerCase().includes("acabado")
+    : (selectedId === "new" ? true : formTemReceita);
 
-  const custoMaoDeObraForm = (Math.max(0, formTempoPreparoMinutos) / 60) * formCustoHoraTrabalho;
-  const custosFixosForm = (custoInsumosForm + custoMaoDeObraForm) * (formPercentualCustosFixos / 100);
-  const custoTotalProducaoForm = custoInsumosForm + custoMaoDeObraForm + custosFixosForm;
+  // Cálculos dinâmicos em tempo real no formulário
+  const custoInsumosForm = isProdutoAcabado
+    ? formItensReceita.reduce((acc, it) => {
+        const ins = insumos.find((i) => i.id === Number(it.insumoId));
+        if (!ins) return acc;
+        return acc + Number(it.quantidade) * Number(ins.custoUnitario);
+      }, 0)
+    : 0;
+
+  const custoMaoDeObraForm = isProdutoAcabado
+    ? (Math.max(0, formTempoPreparoMinutos) / 60) * formCustoHoraTrabalho
+    : 0;
+  const custosFixosForm = isProdutoAcabado
+    ? (custoInsumosForm + custoMaoDeObraForm) * (formPercentualCustosFixos / 100)
+    : 0;
+  const custoTotalProducaoForm = isProdutoAcabado
+    ? custoInsumosForm + custoMaoDeObraForm + custosFixosForm
+    : 0;
   const rendimentoValido = Math.max(1, formRendimentoQtd);
-  const custoPorUnidadeForm = custoTotalProducaoForm / rendimentoValido;
+  const custoPorUnidadeForm = isProdutoAcabado ? custoTotalProducaoForm / rendimentoValido : 0;
   const custoEfetivoForm = formPrecoCusto > 0 ? formPrecoCusto : custoPorUnidadeForm;
 
   const precoSugeridoTotalForm = custoTotalProducaoForm * (1 + formMargemLucroDesejada / 100);
   const precoSugeridoPorUnidadeForm =
     formPrecoCusto > 0 && formMargemLucroDesejada > 0
       ? formPrecoCusto * (1 + formMargemLucroDesejada / 100)
-      : precoSugeridoTotalForm / rendimentoValido;
+      : (isProdutoAcabado ? precoSugeridoTotalForm / rendimentoValido : 0);
 
   const precoCobrado = formPrecoVenda > 0 ? formPrecoVenda : precoSugeridoPorUnidadeForm;
   const lucroRealPorUnidadeForm = precoCobrado - custoEfetivoForm;
@@ -342,15 +363,15 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
         estoqueAtual: formEstoqueAtual,
         estoqueMinimo: formEstoqueMinimo,
         status: formStatus,
-        temReceita: formTemReceita,
-        rendimentoQuantidade: rendimentoValido,
-        rendimentoUnidade: formRendimentoUnidade,
-        tempoPreparoMinutos: formTempoPreparoMinutos,
-        custoHoraTrabalho: formCustoHoraTrabalho,
-        percentualCustosFixos: formPercentualCustosFixos,
+        temReceita: isProdutoAcabado,
+        rendimentoQuantidade: isProdutoAcabado ? rendimentoValido : 1,
+        rendimentoUnidade: isProdutoAcabado ? formRendimentoUnidade : formUnidadeVenda,
+        tempoPreparoMinutos: isProdutoAcabado ? formTempoPreparoMinutos : 0,
+        custoHoraTrabalho: isProdutoAcabado ? formCustoHoraTrabalho : 0,
+        percentualCustosFixos: isProdutoAcabado ? formPercentualCustosFixos : 0,
         margemLucroDesejada: formMargemLucroDesejada,
-        modoPreparo: formModoPreparo,
-        itensReceita: formTemReceita ? formItensReceita : [],
+        modoPreparo: isProdutoAcabado ? formModoPreparo : undefined,
+        itensReceita: isProdutoAcabado ? formItensReceita : [],
       };
 
       const salvo = await saveProduto(payload);
@@ -665,14 +686,16 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                   <Tag size={13} style={{ display: "inline", marginRight: "4px" }} />
                   Dados Gerais do Produto
                 </button>
-                <button
-                  type="button"
-                  className={formTab === "receita" ? "active" : ""}
-                  onClick={() => setFormTab("receita")}
-                >
-                  <ChefHat size={13} style={{ display: "inline", marginRight: "4px" }} />
-                  Ficha Técnica & Receita ({formItensReceita.length} insumos)
-                </button>
+                {isProdutoAcabado ? (
+                  <button
+                    type="button"
+                    className={formTab === "receita" ? "active" : ""}
+                    onClick={() => setFormTab("receita")}
+                  >
+                    <ChefHat size={13} style={{ display: "inline", marginRight: "4px" }} />
+                    Ficha Técnica & Receita ({formItensReceita.length} insumos)
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className={formTab === "historico" ? "active" : ""}
@@ -726,7 +749,17 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                         <div style={{ display: "flex", gap: "8px" }}>
                           <select
                             value={formTipoItemId || ""}
-                            onChange={(e) => setFormTipoItemId(Number(e.target.value) || null)}
+                            onChange={(e) => {
+                              const newId = Number(e.target.value) || null;
+                              setFormTipoItemId(newId);
+                              const tSel = tiposItem.find((t) => t.id === newId);
+                              const ehAcabado = tSel
+                                ? tSel.codigo === "4" || tSel.nome.toLowerCase().includes("acabado")
+                                : false;
+                              if (!ehAcabado && formTab === "receita") {
+                                setFormTab("dados");
+                              }
+                            }}
                             style={{ flex: 1 }}
                             required
                           >
@@ -942,8 +975,8 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                 </div>
               )}
 
-              {/* CONTEÚDO DA ABA 2: FICHA TÉCNICA & RECEITA INTEGRADA */}
-              {formTab === "receita" && (
+              {/* CONTEÚDO DA ABA 2: FICHA TÉCNICA & RECEITA INTEGRADA (Apenas Produtos Acabados) */}
+              {formTab === "receita" && isProdutoAcabado && (
                 <div style={{ marginTop: "20px" }}>
                   {/* Seção de Insumos da Receita */}
                   <div className="subpanel" style={{ marginBottom: "16px" }}>
