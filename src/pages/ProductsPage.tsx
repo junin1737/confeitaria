@@ -24,6 +24,7 @@ import {
   FolderPlus,
   History,
   Layers,
+  Pencil,
   Plus,
   Search,
   Tag,
@@ -74,6 +75,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
   const [filtroGrupo, setFiltroGrupo] = useState<number | "todos">("todos");
   const [filtroTipoItem, setFiltroTipoItem] = useState<number | "todos">("todos");
   const [selectedId, setSelectedId] = useState<number | "new" | null>(null);
+  const [editMode, setEditMode] = useState<boolean>(false);
 
   // Abas do formulário do produto: "dados", "receita", "historico"
   const [formTab, setFormTab] = useState<"dados" | "receita" | "historico">("dados");
@@ -187,6 +189,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
 
   const selecionarProduto = (p: Produto) => {
     setSelectedId(p.id);
+    setEditMode(false);
     setFormCodigo(p.codigo);
     setFormNome(p.nome);
     setFormDescricao(p.descricao || "");
@@ -238,6 +241,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
       setFormCodigo(proximoCod);
     }
     setSelectedId("new");
+    setEditMode(true);
     setFormNome("");
     setFormDescricao("");
     setFormTipoItemId(tiposItem.find((t) => t.padrao)?.id || tiposItem[0]?.id || null);
@@ -270,6 +274,29 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
   const isProdutoAcabado = tipoItemSelecionado
     ? tipoItemSelecionado.codigo === "4" || tipoItemSelecionado.nome.toLowerCase().includes("acabado")
     : (selectedId === "new" ? true : formTemReceita);
+
+  const verificarNaoVendavel = (t: TipoItem | undefined) => {
+    if (!t) return false;
+    const cod = (t.codigo || "").trim();
+    const nome = (t.nome || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    if (["1", "2", "3", "5", "6", "7", "8", "10"].includes(cod)) return true;
+    return (
+      nome.includes("materia-prima") ||
+      nome.includes("materia prima") ||
+      nome.includes("insumo") ||
+      nome.includes("embalagem") ||
+      nome.includes("uso e consumo") ||
+      nome.includes("imobilizado") ||
+      nome.includes("intermediario") ||
+      nome.includes("em processo") ||
+      nome.includes("subproduto")
+    );
+  };
+
+  const isNaoVendavel = verificarNaoVendavel(tipoItemSelecionado);
 
   // Cálculos dinâmicos em tempo real no formulário
   const custoInsumosForm = isProdutoAcabado
@@ -359,10 +386,10 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
         subgrupoId: formSubgrupoId,
         unidadeVenda: formUnidadeVenda,
         precoCusto: formPrecoCusto > 0 ? formPrecoCusto : (custoPorUnidadeForm > 0 ? custoPorUnidadeForm : 0),
-        precoVenda: formPrecoVenda || precoSugeridoPorUnidadeForm,
+        precoVenda: isNaoVendavel ? (formPrecoVenda || 0) : (formPrecoVenda || precoSugeridoPorUnidadeForm),
         estoqueAtual: formEstoqueAtual,
         estoqueMinimo: formEstoqueMinimo,
-        status: formStatus,
+        status: isNaoVendavel ? "inativo" : formStatus,
         temReceita: isProdutoAcabado,
         rendimentoQuantidade: isProdutoAcabado ? rendimentoValido : 1,
         rendimentoUnidade: isProdutoAcabado ? formRendimentoUnidade : formUnidadeVenda,
@@ -378,6 +405,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
       onAction(`Produto "${salvo.nome}" salvo com sucesso!`);
       await carregarDados();
       setSelectedId(salvo.id);
+      setEditMode(false);
     } catch (err: any) {
       setFormError(err?.message || "Não foi possível salvar o produto.");
     } finally {
@@ -600,7 +628,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                   </div>
                   <div>
                     <span className="live-pill">
-                      {selectedId === "new" ? "NOVO CADASTRO" : formStatus.toUpperCase()}
+                      {selectedId === "new" ? "NOVO CADASTRO" : (isNaoVendavel ? "USO INTERNO / INSUMO" : formStatus.toUpperCase())}
                     </span>
                     <h2>{formNome || "Novo Produto"}</h2>
                     <p>
@@ -610,33 +638,63 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                 </div>
 
                 <div className="detail-actions">
-                  <button
-                    type="button"
-                    className="button secondary"
-                    onClick={() => {
-                      if (produtos.length > 0) {
-                        selecionarProduto(produtos[0]);
-                      } else {
-                        setSelectedId(null);
-                      }
-                      setFormError("");
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                  {selectedId !== "new" && selectedId != null ? (
-                    <button
-                      type="button"
-                      className="button secondary"
-                      onClick={() => handleExcluir(selectedId)}
-                      style={{ color: "var(--c-danger)" }}
-                    >
-                      <Trash2 size={14} /> Excluir
-                    </button>
-                  ) : null}
-                  <button type="submit" disabled={saving} className="button primary">
-                    <Check size={14} /> {saving ? "Salvando..." : "Salvar produto"}
-                  </button>
+                  {!editMode && selectedId !== "new" && selectedId != null ? (
+                    <>
+                      <button
+                        type="button"
+                        className="button secondary"
+                        onClick={() => handleExcluir(selectedId)}
+                        style={{ color: "var(--c-danger)" }}
+                      >
+                        <Trash2 size={14} /> Excluir
+                      </button>
+                      <button
+                        type="button"
+                        className="button primary"
+                        onClick={() => setEditMode(true)}
+                      >
+                        <Pencil size={14} /> Editar produto
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="button secondary"
+                        onClick={() => {
+                          if (selectedId !== "new" && selectedId != null) {
+                            const prodAtual = produtos.find((p) => p.id === selectedId);
+                            if (prodAtual) {
+                              selecionarProduto(prodAtual);
+                            } else {
+                              setEditMode(false);
+                            }
+                          } else if (produtos.length > 0) {
+                            selecionarProduto(produtos[0]);
+                          } else {
+                            setSelectedId(null);
+                            setEditMode(false);
+                          }
+                          setFormError("");
+                        }}
+                      >
+                        Cancelar
+                      </button>
+                      {selectedId !== "new" && selectedId != null ? (
+                        <button
+                          type="button"
+                          className="button secondary"
+                          onClick={() => handleExcluir(selectedId)}
+                          style={{ color: "var(--c-danger)" }}
+                        >
+                          <Trash2 size={14} /> Excluir
+                        </button>
+                      ) : null}
+                      <button type="submit" disabled={saving} className="button primary">
+                        <Check size={14} /> {saving ? "Salvando..." : "Salvar produto"}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -651,9 +709,9 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                 <div>
                   <span>Preço de Venda</span>
                   <strong style={{ color: "var(--c-primary)" }}>
-                    R$ {(formPrecoVenda || precoSugeridoPorUnidadeForm).toFixed(2)}
+                    {isNaoVendavel && !formPrecoVenda ? "Não aplicável" : `R$ ${(formPrecoVenda || precoSugeridoPorUnidadeForm).toFixed(2)}`}
                   </strong>
-                  <small>Por {formUnidadeVenda}</small>
+                  <small>{isNaoVendavel ? "Uso interno / produção" : `Por ${formUnidadeVenda}`}</small>
                 </div>
                 <div>
                   <span>Custo Atual</span>
@@ -670,9 +728,9 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                 <div>
                   <span>Margem Líquida Real</span>
                   <strong style={{ color: margemRealCalculada >= 50 ? "#4fa27a" : "#d97706" }}>
-                    {margemRealCalculada}%
+                    {isNaoVendavel && !formPrecoVenda ? "—" : `${margemRealCalculada}%`}
                   </strong>
-                  <small>Lucro: R$ {lucroRealPorUnidadeForm.toFixed(2)} / un</small>
+                  <small>{isNaoVendavel && !formPrecoVenda ? "Item não comercializável" : `Lucro: R$ ${lucroRealPorUnidadeForm.toFixed(2)} / un`}</small>
                 </div>
               </div>
 
@@ -711,483 +769,531 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                 </button>
               </div>
 
+              {!editMode && (formTab === "dados" || formTab === "receita") && (
+                <div
+                  style={{
+                    marginTop: "14px",
+                    padding: "8px 14px",
+                    background: "#fcfaf8",
+                    border: "1px dashed var(--c-border)",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    color: "var(--c-muted)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span>Modo somente leitura. Clique em <b>"Editar produto"</b> acima para habilitar a edição dos campos.</span>
+                  <button
+                    type="button"
+                    className="text-button"
+                    style={{ fontSize: "12px", color: "var(--c-primary)", fontWeight: 600, padding: 0 }}
+                    onClick={() => setEditMode(true)}
+                  >
+                    Habilitar edição
+                  </button>
+                </div>
+              )}
+
               {/* CONTEÚDO DA ABA 1: DADOS GERAIS */}
               {formTab === "dados" && (
-                <div style={{ marginTop: "20px" }} className="detail-sections">
-                  {/* Subpainel: Identificação */}
-                  <div className="subpanel">
-                    <div className="subpanel-head">
-                      <div>
-                        <div className="section-kicker">Identificação</div>
-                        <h3>Dados Básicos</h3>
-                      </div>
-                    </div>
-                    <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: "10px" }}>
-                        <div className="field">
-                          <label>Código Interno</label>
-                          <input
-                            value={formCodigo}
-                            onChange={(e) => setFormCodigo(e.target.value)}
-                            placeholder="PRD-001"
-                            required
-                          />
-                        </div>
-                        <div className="field">
-                          <label>Nome do Produto *</label>
-                          <input
-                            value={formNome}
-                            onChange={(e) => setFormNome(e.target.value)}
-                            placeholder="Ex: Bolo Vulcão Ninho c/ Nutella"
-                            required
-                          />
+                <fieldset disabled={!editMode} style={{ border: "none", padding: 0, margin: 0, minWidth: 0 }}>
+                  <div style={{ marginTop: "20px" }} className="detail-sections">
+                    {/* Subpainel: Identificação */}
+                    <div className="subpanel">
+                      <div className="subpanel-head">
+                        <div>
+                          <div className="section-kicker">Identificação</div>
+                          <h3>Dados Básicos</h3>
                         </div>
                       </div>
+                      <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: "10px" }}>
+                          <div className="field">
+                            <label>Código Interno</label>
+                            <input
+                              value={formCodigo}
+                              onChange={(e) => setFormCodigo(e.target.value)}
+                              placeholder="PRD-001"
+                              required
+                            />
+                          </div>
+                          <div className="field">
+                            <label>Nome do Produto *</label>
+                            <input
+                              value={formNome}
+                              onChange={(e) => setFormNome(e.target.value)}
+                              placeholder="Ex: Bolo Vulcão Ninho c/ Nutella"
+                              required
+                            />
+                          </div>
+                        </div>
 
-                      <div className="field">
-                        <label>Tipo de Item (Classificação) *</label>
-                        <div style={{ display: "flex", gap: "8px" }}>
-                          <select
-                            value={formTipoItemId || ""}
-                            onChange={(e) => {
-                              const newId = Number(e.target.value) || null;
-                              setFormTipoItemId(newId);
-                              const tSel = tiposItem.find((t) => t.id === newId);
-                              const ehAcabado = tSel
-                                ? tSel.codigo === "4" || tSel.nome.toLowerCase().includes("acabado")
-                                : false;
-                              if (!ehAcabado && formTab === "receita") {
-                                setFormTab("dados");
-                              }
-                            }}
-                            style={{ flex: 1 }}
-                            required
-                          >
-                            <option value="">Selecione o tipo de item...</option>
-                            {tiposItem.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.nome} {t.codigo ? `(${t.codigo})` : ""}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            className="button secondary"
-                            onClick={() => setModalTiposAberto(true)}
-                            title="Cadastrar / Gerenciar Tipos de Item"
-                          >
-                            <Plus size={14} /> Novo Tipo
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="field">
-                        <label>Descrição Comercial</label>
-                        <textarea
-                          rows={2}
-                          value={formDescricao}
-                          onChange={(e) => setFormDescricao(e.target.value)}
-                          placeholder="Descrição atrativa para o cardápio e clientes..."
-                        />
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                         <div className="field">
-                          <label>Grupo / Categoria *</label>
-                          <select
-                            value={formGrupoId || ""}
-                            onChange={(e) => {
-                              const gid = Number(e.target.value) || null;
-                              setFormGrupoId(gid);
-                              setFormSubgrupoId(null);
-                            }}
-                          >
-                            <option value="">Selecione...</option>
-                            {grupos.map((g) => (
-                              <option key={g.id} value={g.id}>
-                                {g.nome}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="field">
-                          <label>Subgrupo</label>
-                          <select
-                            value={formSubgrupoId || ""}
-                            onChange={(e) => setFormSubgrupoId(Number(e.target.value) || null)}
-                          >
-                            <option value="">Nenhum</option>
-                            {subgruposDisponiveis.map((s) => (
-                              <option key={s.id} value={s.id}>
-                                {s.nome}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Subpainel: Venda & Estoque */}
-                  <div className="subpanel">
-                    <div className="subpanel-head">
-                      <div>
-                        <div className="section-kicker">Comercial & Estoque</div>
-                        <h3>Valores & Pronta Entrega</h3>
-                      </div>
-                    </div>
-                    <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                        <div className="field">
-                          <label>Unidade de Medida / Venda *</label>
+                          <label>Tipo de Item (Classificação) *</label>
                           <div style={{ display: "flex", gap: "8px" }}>
                             <select
-                              value={formUnidadeVenda}
-                              onChange={(e) => setFormUnidadeVenda(e.target.value)}
+                              value={formTipoItemId || ""}
+                              onChange={(e) => {
+                                const newId = Number(e.target.value) || null;
+                                setFormTipoItemId(newId);
+                                const tSel = tiposItem.find((t) => t.id === newId);
+                                const ehAcabado = tSel
+                                  ? tSel.codigo === "4" || tSel.nome.toLowerCase().includes("acabado")
+                                  : false;
+                                if (!ehAcabado && formTab === "receita") {
+                                  setFormTab("dados");
+                                }
+                                if (verificarNaoVendavel(tSel)) {
+                                  setFormStatus("inativo");
+                                }
+                              }}
                               style={{ flex: 1 }}
                               required
                             >
-                              {unidadesMedida.length > 0 ? (
-                                unidadesMedida.map((u) => (
-                                  <option key={u.id} value={u.sigla}>
-                                    {u.sigla} - {u.nome}
-                                  </option>
-                                ))
-                              ) : (
-                                <>
-                                  <option value="UN">UN - Unidade</option>
-                                  <option value="KG">KG - Quilo</option>
-                                  <option value="G">G - Grama</option>
-                                  <option value="CENTO">CENTO - Cento</option>
-                                  <option value="CX">CX - Caixa</option>
-                                  <option value="FATIA">FATIA - Fatia</option>
-                                </>
-                              )}
+                              <option value="">Selecione o tipo de item...</option>
+                              {tiposItem.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.nome} {t.codigo ? `(${t.codigo})` : ""}
+                                </option>
+                              ))}
                             </select>
                             <button
                               type="button"
                               className="button secondary"
-                              onClick={() => setModalUnidadesAberto(true)}
-                              title="Cadastrar / Gerenciar Unidades de Medida"
-                              style={{ padding: "0 10px", fontSize: "12px", whiteSpace: "nowrap" }}
+                              onClick={() => setModalTiposAberto(true)}
+                              title="Cadastrar / Gerenciar Tipos de Item"
                             >
-                              <Plus size={14} /> Unidades
+                              <Plus size={14} /> Novo Tipo
                             </button>
                           </div>
                         </div>
-                        <div className="field">
-                          <label>Status</label>
-                          <select
-                            value={formStatus}
-                            onChange={(e) => setFormStatus(e.target.value as any)}
-                          >
-                            <option value="ativo">Ativo no Cardápio</option>
-                            <option value="inativo">Inativo / Oculto</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
-                        <div className="field">
-                          <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span>Preço de Custo (R$)</span>
-                            {formTemReceita && custoPorUnidadeForm > 0 && (
-                              <button
-                                type="button"
-                                className="text-button"
-                                style={{ fontSize: "11px", color: "var(--c-primary)", textDecoration: "underline", padding: 0 }}
-                                onClick={() => setFormPrecoCusto(Number(custoPorUnidadeForm.toFixed(2)))}
-                                title="Preencher com o custo calculado da receita"
-                              >
-                                Usar da receita (R$ {custoPorUnidadeForm.toFixed(2)})
-                              </button>
-                            )}
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={formPrecoCusto || ""}
-                            onChange={(e) => setFormPrecoCusto(Number(e.target.value))}
-                            placeholder={custoPorUnidadeForm > 0 ? custoPorUnidadeForm.toFixed(2) : "0,00"}
-                            style={{ fontSize: "15px", fontWeight: "600" }}
-                          />
-                          <small style={{ color: "var(--c-muted)", fontSize: "10px", marginTop: "3px", display: "block" }}>
-                            {formTemReceita && custoPorUnidadeForm > 0
-                              ? `Custo da ficha técnica: R$ ${custoPorUnidadeForm.toFixed(2)} / ${formUnidadeVenda}`
-                              : "Custo de compra ou fabricação unitária"}
-                          </small>
-                        </div>
 
                         <div className="field">
-                          <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span>Preço de Venda Praticado (R$) *</span>
-                            {precoSugeridoPorUnidadeForm > 0 && (
-                              <button
-                                type="button"
-                                className="text-button"
-                                style={{ fontSize: "11px", color: "var(--c-primary)", textDecoration: "underline", padding: 0 }}
-                                onClick={() => setFormPrecoVenda(Number(precoSugeridoPorUnidadeForm.toFixed(2)))}
-                                title="Usar o preço sugerido com a margem desejada"
-                              >
-                                Usar sugerido (R$ {precoSugeridoPorUnidadeForm.toFixed(2)})
-                              </button>
-                            )}
-                          </label>
-                          <input
-                            type="number"
-                            step="0.50"
-                            min="0"
-                            value={formPrecoVenda || ""}
-                            onChange={(e) => setFormPrecoVenda(Number(e.target.value))}
-                            placeholder="Valor cobrado do cliente"
-                            style={{ fontSize: "15px", fontWeight: "bold", color: "var(--c-primary)" }}
-                            required
-                          />
-                          <small style={{ color: "var(--c-muted)", fontSize: "10px", marginTop: "3px", display: "block" }}>
-                            Sugerido: <b>R$ {precoSugeridoPorUnidadeForm.toFixed(2)}</b>
-                            {formMargemLucroDesejada > 0 ? ` (${formMargemLucroDesejada}% margem)` : ""}
-                          </small>
-                        </div>
-                      </div>
-
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                        <div className="field">
-                          <label>Estoque Atual ({formUnidadeVenda})</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={formEstoqueAtual}
-                            onChange={(e) => setFormEstoqueAtual(Number(e.target.value))}
+                          <label>Descrição Comercial</label>
+                          <textarea
+                            rows={2}
+                            value={formDescricao}
+                            onChange={(e) => setFormDescricao(e.target.value)}
+                            placeholder="Descrição atrativa para o cardápio e clientes..."
                           />
                         </div>
-                        <div className="field">
-                          <label>Estoque Mínimo</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={formEstoqueMinimo}
-                            onChange={(e) => setFormEstoqueMinimo(Number(e.target.value))}
-                          />
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                          <div className="field">
+                            <label>Grupo / Categoria *</label>
+                            <select
+                              value={formGrupoId || ""}
+                              onChange={(e) => {
+                                const gid = Number(e.target.value) || null;
+                                setFormGrupoId(gid);
+                                setFormSubgrupoId(null);
+                              }}
+                            >
+                              <option value="">Selecione...</option>
+                              {grupos.map((g) => (
+                                <option key={g.id} value={g.id}>
+                                  {g.nome}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="field">
+                            <label>Subgrupo</label>
+                            <select
+                              value={formSubgrupoId || ""}
+                              onChange={(e) => setFormSubgrupoId(Number(e.target.value) || null)}
+                            >
+                              <option value="">Nenhum</option>
+                              {subgruposDisponiveis.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.nome}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              )}
 
-              {/* CONTEÚDO DA ABA 2: FICHA TÉCNICA & RECEITA INTEGRADA (Apenas Produtos Acabados) */}
-              {formTab === "receita" && isProdutoAcabado && (
-                <div style={{ marginTop: "20px" }}>
-                  {/* Seção de Insumos da Receita */}
-                  <div className="subpanel" style={{ marginBottom: "16px" }}>
-                    <div className="subpanel-head">
-                      <div>
-                        <div className="section-kicker">Composição da Receita</div>
-                        <h3>Ingredientes & Embalagens Utilizados</h3>
-                      </div>
-                      <button
-                        type="button"
-                        className="button secondary"
-                        onClick={adicionarItemReceita}
-                        style={{ height: "30px", fontSize: "11px" }}
-                      >
-                        <Plus size={14} /> Adicionar Insumo
-                      </button>
-                    </div>
-
-                    {formItensReceita.length === 0 ? (
-                      <div className="employee-empty" style={{ padding: "30px" }}>
-                        Nenhum insumo adicionado a esta receita. Clique em "Adicionar Insumo" acima.
-                      </div>
-                    ) : (
-                      <div style={{ marginTop: "12px", border: "1px solid var(--c-border)", borderRadius: "8px", overflow: "hidden" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-                          <thead>
-                            <tr style={{ background: "#fcfaf8", borderBottom: "1px solid var(--c-border)", textAlign: "left" }}>
-                              <th style={{ padding: "8px 12px" }}>Insumo / Matéria-Prima</th>
-                              <th style={{ padding: "8px 12px", width: "130px" }}>Quantidade</th>
-                              <th style={{ padding: "8px 12px", width: "100px", textAlign: "right" }}>Custo Rateado</th>
-                              <th style={{ padding: "8px 12px", width: "50px" }}></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {formItensReceita.map((item, idx) => {
-                              const ins = insumos.find((i) => i.id === Number(item.insumoId));
-                              const custoItem = ins ? Number(item.quantidade) * Number(ins.custoUnitario) : 0;
-
-                              return (
-                                <tr key={idx} style={{ borderBottom: "1px solid #f5efe9" }}>
-                                  <td style={{ padding: "8px 12px" }}>
-                                    <select
-                                      value={item.insumoId}
-                                      onChange={(e) => atualizarItemReceita(idx, "insumoId", Number(e.target.value))}
-                                      style={{ width: "100%", padding: "4px 8px", border: "1px solid var(--c-border)", borderRadius: "6px" }}
-                                    >
-                                      {insumos.map((i) => (
-                                        <option key={i.id} value={i.id}>
-                                          {i.nome} (R$ {i.custoUnitario.toFixed(4)} / {i.unidadeMedida})
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                  <td style={{ padding: "8px 12px" }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                      <input
-                                        type="number"
-                                        step="any"
-                                        min="0.001"
-                                        value={item.quantidade}
-                                        onChange={(e) => atualizarItemReceita(idx, "quantidade", Number(e.target.value))}
-                                        style={{ width: "70px", padding: "4px 8px", border: "1px solid var(--c-border)", borderRadius: "6px", textAlign: "right" }}
-                                      />
-                                      <span style={{ fontSize: "11px", color: "var(--c-muted)" }}>{item.unidade}</span>
-                                    </div>
-                                  </td>
-                                  <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: "bold" }}>
-                                    R$ {custoItem.toFixed(2)}
-                                  </td>
-                                  <td style={{ padding: "8px 12px", textAlign: "center" }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => removerItemReceita(idx)}
-                                      style={{ color: "var(--c-danger)", padding: "4px" }}
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Engenharia de Custos: Tempo, Custos Fixos e Rendimento */}
-                  <div className="detail-sections">
+                    {/* Subpainel: Venda & Estoque */}
                     <div className="subpanel">
                       <div className="subpanel-head">
                         <div>
-                          <div className="section-kicker">Mão de Obra & Custos Invisíveis</div>
-                          <h3>Parâmetros de Produção</h3>
+                          <div className="section-kicker">Comercial & Estoque</div>
+                          <h3>Valores & Pronta Entrega</h3>
                         </div>
                       </div>
                       <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                           <div className="field">
-                            <label>Rendimento da Receita</label>
-                            <input
-                              type="number"
-                              min="1"
-                              value={formRendimentoQtd}
-                              onChange={(e) => setFormRendimentoQtd(Number(e.target.value))}
-                            />
+                            <label>Unidade de Medida / Venda *</label>
+                            <div style={{ display: "flex", gap: "8px" }}>
+                              <select
+                                value={formUnidadeVenda}
+                                onChange={(e) => setFormUnidadeVenda(e.target.value)}
+                                style={{ flex: 1 }}
+                                required
+                              >
+                                {unidadesMedida.length > 0 ? (
+                                  unidadesMedida.map((u) => (
+                                    <option key={u.id} value={u.sigla}>
+                                      {u.sigla} - {u.nome}
+                                    </option>
+                                  ))
+                                ) : (
+                                  <>
+                                    <option value="UN">UN - Unidade</option>
+                                    <option value="KG">KG - Quilo</option>
+                                    <option value="G">G - Grama</option>
+                                    <option value="CENTO">CENTO - Cento</option>
+                                    <option value="CX">CX - Caixa</option>
+                                    <option value="FATIA">FATIA - Fatia</option>
+                                  </>
+                                )}
+                              </select>
+                              <button
+                                type="button"
+                                className="button secondary"
+                                onClick={() => setModalUnidadesAberto(true)}
+                                title="Cadastrar / Gerenciar Unidades de Medida"
+                                style={{ padding: "0 10px", fontSize: "12px", whiteSpace: "nowrap" }}
+                              >
+                                <Plus size={14} /> Unidades
+                              </button>
+                            </div>
                           </div>
                           <div className="field">
-                            <label>Unidade do Rendimento</label>
+                            <label>Status no Cardápio</label>
+                            <select
+                              value={isNaoVendavel ? "inativo" : formStatus}
+                              onChange={(e) => setFormStatus(e.target.value as any)}
+                              disabled={!editMode || isNaoVendavel}
+                            >
+                              {!isNaoVendavel && <option value="ativo">Ativo no Cardápio</option>}
+                              <option value="inativo">
+                                {isNaoVendavel ? "Desabilitado no Cardápio (Não destinado à venda)" : "Inativo / Oculto"}
+                              </option>
+                            </select>
+                            {isNaoVendavel && (
+                              <small style={{ color: "var(--c-muted)", fontSize: "10px", marginTop: "3px", display: "block" }}>
+                                Matéria-prima, embalagem e insumos não aparecem no cardápio de venda.
+                              </small>
+                            )}
+                          </div>
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                          <div className="field">
+                            <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span>Preço de Custo (R$)</span>
+                              {formTemReceita && custoPorUnidadeForm > 0 && (
+                                <button
+                                  type="button"
+                                  className="text-button"
+                                  style={{ fontSize: "11px", color: "var(--c-primary)", textDecoration: "underline", padding: 0 }}
+                                  onClick={() => setFormPrecoCusto(Number(custoPorUnidadeForm.toFixed(2)))}
+                                  title="Preencher com o custo calculado da receita"
+                                >
+                                  Usar da receita (R$ {custoPorUnidadeForm.toFixed(2)})
+                                </button>
+                              )}
+                            </label>
                             <input
-                              value={formRendimentoUnidade}
-                              onChange={(e) => setFormRendimentoUnidade(e.target.value)}
-                              placeholder="bolo, unidades, etc."
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={formPrecoCusto || ""}
+                              onChange={(e) => setFormPrecoCusto(Number(e.target.value))}
+                              placeholder={custoPorUnidadeForm > 0 ? custoPorUnidadeForm.toFixed(2) : "0,00"}
+                              style={{ fontSize: "15px", fontWeight: "600" }}
                             />
+                            <small style={{ color: "var(--c-muted)", fontSize: "10px", marginTop: "3px", display: "block" }}>
+                              {formTemReceita && custoPorUnidadeForm > 0
+                                ? `Custo da ficha técnica: R$ ${custoPorUnidadeForm.toFixed(2)} / ${formUnidadeVenda}`
+                                : "Custo de compra ou fabricação unitária"}
+                            </small>
+                          </div>
+
+                          <div className="field">
+                            <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span>Preço de Venda Praticado (R$){isNaoVendavel ? " (Opcional)" : " *"}</span>
+                              {!isNaoVendavel && precoSugeridoPorUnidadeForm > 0 && (
+                                <button
+                                  type="button"
+                                  className="text-button"
+                                  style={{ fontSize: "11px", color: "var(--c-primary)", textDecoration: "underline", padding: 0 }}
+                                  onClick={() => setFormPrecoVenda(Number(precoSugeridoPorUnidadeForm.toFixed(2)))}
+                                  title="Usar o preço sugerido com a margem desejada"
+                                >
+                                  Usar sugerido (R$ {precoSugeridoPorUnidadeForm.toFixed(2)})
+                                </button>
+                              )}
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={formPrecoVenda || ""}
+                              onChange={(e) => setFormPrecoVenda(Number(e.target.value))}
+                              placeholder={isNaoVendavel ? "Opcional (não destinado à venda)" : "Valor cobrado do cliente"}
+                              style={{ fontSize: "15px", fontWeight: "bold", color: "var(--c-primary)" }}
+                              required={!isNaoVendavel}
+                            />
+                            <small style={{ color: "var(--c-muted)", fontSize: "10px", marginTop: "3px", display: "block" }}>
+                              {isNaoVendavel ? (
+                                "Não obrigatório para matéria-prima, embalagem ou insumos."
+                              ) : (
+                                <>
+                                  Sugerido: <b>R$ {precoSugeridoPorUnidadeForm.toFixed(2)}</b>
+                                  {formMargemLucroDesejada > 0 ? ` (${formMargemLucroDesejada}% margem)` : ""}
+                                </>
+                              )}
+                            </small>
                           </div>
                         </div>
 
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                           <div className="field">
-                            <label>Tempo de Preparo (min)</label>
+                            <label>Estoque Atual ({formUnidadeVenda})</label>
                             <input
                               type="number"
                               min="0"
-                              value={formTempoPreparoMinutos}
-                              onChange={(e) => setFormTempoPreparoMinutos(Number(e.target.value))}
+                              value={formEstoqueAtual}
+                              onChange={(e) => setFormEstoqueAtual(Number(e.target.value))}
                             />
                           </div>
                           <div className="field">
-                            <label>Sua Hora de Trabalho (R$/h)</label>
-                            <input
-                              type="number"
-                              step="0.50"
-                              value={formCustoHoraTrabalho}
-                              onChange={(e) => setFormCustoHoraTrabalho(Number(e.target.value))}
-                            />
-                          </div>
-                        </div>
-
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                          <div className="field">
-                            <label>Custos Fixos / Gás (%)</label>
+                            <label>Estoque Mínimo</label>
                             <input
                               type="number"
                               min="0"
-                              value={formPercentualCustosFixos}
-                              onChange={(e) => setFormPercentualCustosFixos(Number(e.target.value))}
-                            />
-                          </div>
-                          <div className="field">
-                            <label>Margem Desejada (%)</label>
-                            <input
-                              type="number"
-                              min="0"
-                              value={formMargemLucroDesejada}
-                              onChange={(e) => setFormMargemLucroDesejada(Number(e.target.value))}
+                              value={formEstoqueMinimo}
+                              onChange={(e) => setFormEstoqueMinimo(Number(e.target.value))}
                             />
                           </div>
                         </div>
-                      </div>
-                    </div>
-
-                    {/* Resumo da Formação de Preço */}
-                    <div className="subpanel" style={{ background: "#fcfaf8" }}>
-                      <div className="subpanel-head">
-                        <div>
-                          <div className="section-kicker">Engenharia Financeira</div>
-                          <h3>Formação do Preço</h3>
-                        </div>
-                      </div>
-
-                      <div style={{ display: "grid", gap: "8px", marginTop: "14px", fontSize: "12px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", color: "var(--c-muted)" }}>
-                          <span>Insumos da Receita:</span>
-                          <b>R$ {custoInsumosForm.toFixed(2)}</b>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", color: "var(--c-muted)" }}>
-                          <span>Mão de Obra ({formTempoPreparoMinutos} min):</span>
-                          <b>R$ {custoMaoDeObraForm.toFixed(2)}</b>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", color: "var(--c-muted)" }}>
-                          <span>Custos Fixos / Gás ({formPercentualCustosFixos}%):</span>
-                          <b>R$ {custosFixosForm.toFixed(2)}</b>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "8px", borderTop: "1px solid var(--c-border)", fontSize: "13px" }}>
-                          <span>Custo de Produção Total:</span>
-                          <strong>R$ {custoTotalProducaoForm.toFixed(2)}</strong>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", color: "var(--c-primary)" }}>
-                          <span>Custo por {formRendimentoUnidade}:</span>
-                          <b>R$ {custoPorUnidadeForm.toFixed(2)}</b>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "8px", borderTop: "1px dashed var(--c-border)", fontSize: "13px" }}>
-                          <span>Preço Sugerido ({formMargemLucroDesejada}%):</span>
-                          <strong style={{ color: "var(--c-primary)" }}>
-                            R$ {precoSugeridoPorUnidadeForm.toFixed(2)}
-                          </strong>
-                        </div>
-                      </div>
-
-                      <div className="field" style={{ marginTop: "14px" }}>
-                        <label>Instruções / Modo de Preparo</label>
-                        <textarea
-                          rows={3}
-                          value={formModoPreparo}
-                          onChange={(e) => setFormModoPreparo(e.target.value)}
-                          placeholder="Passo a passo para a confeiteira e equipe de produção..."
-                        />
                       </div>
                     </div>
                   </div>
-                </div>
+                </fieldset>
+              )}
+
+              {/* CONTEÚDO DA ABA 2: FICHA TÉCNICA & RECEITA INTEGRADA (Apenas Produtos Acabados) */}
+              {formTab === "receita" && isProdutoAcabado && (
+                <fieldset disabled={!editMode} style={{ border: "none", padding: 0, margin: 0, minWidth: 0 }}>
+                  <div style={{ marginTop: "20px" }}>
+                    {/* Seção de Insumos da Receita */}
+                    <div className="subpanel" style={{ marginBottom: "16px" }}>
+                      <div className="subpanel-head">
+                        <div>
+                          <div className="section-kicker">Composição da Receita</div>
+                          <h3>Ingredientes & Embalagens Utilizados</h3>
+                        </div>
+                        <button
+                          type="button"
+                          className="button secondary"
+                          onClick={adicionarItemReceita}
+                          style={{ height: "30px", fontSize: "11px" }}
+                        >
+                          <Plus size={14} /> Adicionar Insumo
+                        </button>
+                      </div>
+
+                      {formItensReceita.length === 0 ? (
+                        <div className="employee-empty" style={{ padding: "30px" }}>
+                          Nenhum insumo adicionado a esta receita. Clique em "Adicionar Insumo" acima.
+                        </div>
+                      ) : (
+                        <div style={{ marginTop: "12px", border: "1px solid var(--c-border)", borderRadius: "8px", overflow: "hidden" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                            <thead>
+                              <tr style={{ background: "#fcfaf8", borderBottom: "1px solid var(--c-border)", textAlign: "left" }}>
+                                <th style={{ padding: "8px 12px" }}>Insumo / Matéria-Prima</th>
+                                <th style={{ padding: "8px 12px", width: "130px" }}>Quantidade</th>
+                                <th style={{ padding: "8px 12px", width: "100px", textAlign: "right" }}>Custo Rateado</th>
+                                <th style={{ padding: "8px 12px", width: "50px" }}></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {formItensReceita.map((item, idx) => {
+                                const ins = insumos.find((i) => i.id === Number(item.insumoId));
+                                const custoItem = ins ? Number(item.quantidade) * Number(ins.custoUnitario) : 0;
+
+                                return (
+                                  <tr key={idx} style={{ borderBottom: "1px solid #f5efe9" }}>
+                                    <td style={{ padding: "8px 12px" }}>
+                                      <select
+                                        value={item.insumoId}
+                                        onChange={(e) => atualizarItemReceita(idx, "insumoId", Number(e.target.value))}
+                                        style={{ width: "100%", padding: "4px 8px", border: "1px solid var(--c-border)", borderRadius: "6px" }}
+                                      >
+                                        {insumos.map((i) => (
+                                          <option key={i.id} value={i.id}>
+                                            {i.nome} (R$ {i.custoUnitario.toFixed(4)} / {i.unidadeMedida})
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    <td style={{ padding: "8px 12px" }}>
+                                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                        <input
+                                          type="number"
+                                          step="any"
+                                          min="0.001"
+                                          value={item.quantidade}
+                                          onChange={(e) => atualizarItemReceita(idx, "quantidade", Number(e.target.value))}
+                                          style={{ width: "70px", padding: "4px 8px", border: "1px solid var(--c-border)", borderRadius: "6px", textAlign: "right" }}
+                                        />
+                                        <span style={{ fontSize: "11px", color: "var(--c-muted)" }}>{item.unidade}</span>
+                                      </div>
+                                    </td>
+                                    <td style={{ padding: "8px 12px", textAlign: "right", fontWeight: "bold" }}>
+                                      R$ {custoItem.toFixed(2)}
+                                    </td>
+                                    <td style={{ padding: "8px 12px", textAlign: "center" }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => removerItemReceita(idx)}
+                                        style={{ color: "var(--c-danger)", padding: "4px" }}
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Engenharia de Custos: Tempo, Custos Fixos e Rendimento */}
+                    <div className="detail-sections">
+                      <div className="subpanel">
+                        <div className="subpanel-head">
+                          <div>
+                            <div className="section-kicker">Mão de Obra & Custos Invisíveis</div>
+                            <h3>Parâmetros de Produção</h3>
+                          </div>
+                        </div>
+                        <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                            <div className="field">
+                              <label>Rendimento da Receita</label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={formRendimentoQtd}
+                                onChange={(e) => setFormRendimentoQtd(Number(e.target.value))}
+                              />
+                            </div>
+                            <div className="field">
+                              <label>Unidade do Rendimento</label>
+                              <input
+                                value={formRendimentoUnidade}
+                                onChange={(e) => setFormRendimentoUnidade(e.target.value)}
+                                placeholder="bolo, unidades, etc."
+                              />
+                            </div>
+                          </div>
+
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                            <div className="field">
+                              <label>Tempo de Preparo (min)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={formTempoPreparoMinutos}
+                                onChange={(e) => setFormTempoPreparoMinutos(Number(e.target.value))}
+                              />
+                            </div>
+                            <div className="field">
+                              <label>Sua Hora de Trabalho (R$/h)</label>
+                              <input
+                                type="number"
+                                step="0.50"
+                                value={formCustoHoraTrabalho}
+                                onChange={(e) => setFormCustoHoraTrabalho(Number(e.target.value))}
+                              />
+                            </div>
+                          </div>
+
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                            <div className="field">
+                              <label>Custos Fixos / Gás (%)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={formPercentualCustosFixos}
+                                onChange={(e) => setFormPercentualCustosFixos(Number(e.target.value))}
+                              />
+                            </div>
+                            <div className="field">
+                              <label>Margem Desejada (%)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={formMargemLucroDesejada}
+                                onChange={(e) => setFormMargemLucroDesejada(Number(e.target.value))}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Resumo da Formação de Preço */}
+                      <div className="subpanel" style={{ background: "#fcfaf8" }}>
+                        <div className="subpanel-head">
+                          <div>
+                            <div className="section-kicker">Engenharia Financeira</div>
+                            <h3>Formação do Preço</h3>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "grid", gap: "8px", marginTop: "14px", fontSize: "12px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", color: "var(--c-muted)" }}>
+                            <span>Insumos da Receita:</span>
+                            <b>R$ {custoInsumosForm.toFixed(2)}</b>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", color: "var(--c-muted)" }}>
+                            <span>Mão de Obra ({formTempoPreparoMinutos} min):</span>
+                            <b>R$ {custoMaoDeObraForm.toFixed(2)}</b>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", color: "var(--c-muted)" }}>
+                            <span>Custos Fixos / Gás ({formPercentualCustosFixos}%):</span>
+                            <b>R$ {custosFixosForm.toFixed(2)}</b>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "8px", borderTop: "1px solid var(--c-border)", fontSize: "13px" }}>
+                            <span>Custo de Produção Total:</span>
+                            <strong>R$ {custoTotalProducaoForm.toFixed(2)}</strong>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", color: "var(--c-primary)" }}>
+                            <span>Custo por {formRendimentoUnidade}:</span>
+                            <b>R$ {custoPorUnidadeForm.toFixed(2)}</b>
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", paddingTop: "8px", borderTop: "1px dashed var(--c-border)", fontSize: "13px" }}>
+                            <span>Preço Sugerido ({formMargemLucroDesejada}%):</span>
+                            <strong style={{ color: "var(--c-primary)" }}>
+                              R$ {precoSugeridoPorUnidadeForm.toFixed(2)}
+                            </strong>
+                          </div>
+                        </div>
+
+                        <div className="field" style={{ marginTop: "14px" }}>
+                          <label>Instruções / Modo de Preparo</label>
+                          <textarea
+                            rows={3}
+                            value={formModoPreparo}
+                            onChange={(e) => setFormModoPreparo(e.target.value)}
+                            placeholder="Passo a passo para a confeiteira e equipe de produção..."
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </fieldset>
               )}
 
               {/* CONTEÚDO DA ABA 3: EVOLUÇÃO DE CUSTO & AUDITORIA */}
