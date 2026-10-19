@@ -871,6 +871,7 @@ export async function listarProdutos(empresaId: number): Promise<Produto[]> {
 
     const rendimentoQtd = Number(row.rendimento_quantidade ?? 1);
     const precoVenda = Number(row.preco_venda ?? 0);
+    const precoCustoDb = Number(row.preco_custo ?? 0);
 
     const metricas = calcularTotaisReceita(
       itensReceita.map((it) => ({ quantidade: it.quantidade, custoUnitario: it.custoUnitario })),
@@ -890,7 +891,14 @@ export async function listarProdutos(empresaId: number): Promise<Produto[]> {
       args: [produtoId],
     });
     const mediaVal = Number(mediaResult.rows[0]?.media_custo ?? 0);
-    const custoMedio = mediaVal > 0 ? Math.round(mediaVal * 100) / 100 : metricas.custoPorUnidade;
+    const precoCustoFinal = precoCustoDb > 0 ? precoCustoDb : metricas.custoPorUnidade;
+    const custoMedio = mediaVal > 0 ? Math.round(mediaVal * 100) / 100 : precoCustoFinal;
+    const precoVendaFinal = precoVenda || metricas.precoSugeridoPorUnidade;
+    const lucroRealPorUnidade = precoVendaFinal - precoCustoFinal;
+    const margemRealFinal =
+      precoCustoFinal > 0
+        ? Math.round((lucroRealPorUnidade / precoCustoFinal) * 100)
+        : (metricas.margemRealPercentual || 0);
 
     produtos.push({
       id: produtoId,
@@ -904,10 +912,10 @@ export async function listarProdutos(empresaId: number): Promise<Produto[]> {
       subgrupoId: row.subgrupo_id ? Number(row.subgrupo_id) : null,
       subgrupoNome: row.subgrupo_nome ? String(row.subgrupo_nome) : null,
       unidadeVenda: String(row.unidade_venda ?? "unidade"),
-      precoCusto: metricas.custoPorUnidade,
+      precoCusto: precoCustoFinal,
       custoMedio,
-      precoVenda: precoVenda || metricas.precoSugeridoPorUnidade,
-      margemLucroRealPercent: metricas.margemRealPercentual,
+      precoVenda: precoVendaFinal,
+      margemLucroRealPercent: margemRealFinal,
       estoqueAtual: Number(row.estoque_atual ?? 0),
       estoqueMinimo: Number(row.estoque_minimo ?? 0),
       status: (row.status ?? "ativo") as "ativo" | "inativo",
@@ -929,10 +937,10 @@ export async function listarProdutos(empresaId: number): Promise<Produto[]> {
       custoInsumos: metricas.custoInsumos,
       custoMaoDeObra: metricas.custoMaoDeObra,
       custoFixos: metricas.custoFixos,
-      custoTotalProducao: metricas.custoTotalProducao,
-      custoPorUnidade: metricas.custoPorUnidade,
-      lucroRealPorUnidade: metricas.lucroRealPorUnidade,
-      lucroRealTotal: metricas.lucroRealTotal,
+      custoTotalProducao: precoCustoFinal * rendimentoQtd,
+      custoPorUnidade: precoCustoFinal,
+      lucroRealPorUnidade: lucroRealPorUnidade,
+      lucroRealTotal: Math.round(lucroRealPorUnidade * rendimentoQtd * 100) / 100,
     });
   }
 
@@ -955,6 +963,7 @@ export async function salvarProduto(
     grupoId?: number | null;
     subgrupoId?: number | null;
     unidadeVenda?: string;
+    precoCusto?: number;
     precoVenda?: number;
     estoqueAtual?: number;
     estoqueMinimo?: number;
@@ -985,6 +994,7 @@ export async function salvarProduto(
   const custoHora = Math.max(0, Number(dados.custoHoraTrabalho ?? 20));
   const custosFixos = Math.max(0, Number(dados.percentualCustosFixos ?? 15));
   const margemLucro = Math.max(0, Number(dados.margemLucroDesejada ?? 100));
+  const precoCusto = dados.precoCusto !== undefined && dados.precoCusto !== null ? Number(dados.precoCusto) : 0;
   const precoVenda = Number(dados.precoVenda ?? 0);
   const status = dados.status || "ativo";
   const agora = NOW();
@@ -995,7 +1005,7 @@ export async function salvarProduto(
     await db.execute({
       sql: `UPDATE tb_produto SET
               codigo = ?, nome = ?, descricao = ?, tipo_item_id = ?, grupo_id = ?, subgrupo_id = ?,
-              unidade_venda = ?, preco_venda = ?, estoque_atual = ?, estoque_minimo = ?,
+              unidade_venda = ?, preco_custo = ?, preco_venda = ?, estoque_atual = ?, estoque_minimo = ?,
               tem_receita = ?, rendimento_quantidade = ?, rendimento_unidade = ?,
               tempo_preparo_minutos = ?, custo_hora_trabalho = ?, percentual_custos_fixos = ?,
               margem_lucro_desejada = ?, modo_preparo = ?, status = ?, foto_url = ?,
@@ -1009,6 +1019,7 @@ export async function salvarProduto(
         dados.grupoId || null,
         dados.subgrupoId || null,
         dados.unidadeVenda || "unidade",
+        precoCusto,
         precoVenda,
         dados.estoqueAtual ?? 0,
         dados.estoqueMinimo ?? 0,
@@ -1042,7 +1053,7 @@ export async function salvarProduto(
               tempo_preparo_minutos, custo_hora_trabalho, percentual_custos_fixos,
               margem_lucro_desejada, preco_sugerido, modo_preparo, status,
               foto_url, criado_em, atualizado_em
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
       args: [
         empresaId,
         codigo,
@@ -1052,6 +1063,7 @@ export async function salvarProduto(
         dados.grupoId || null,
         dados.subgrupoId || null,
         dados.unidadeVenda || "unidade",
+        precoCusto,
         precoVenda,
         dados.estoqueAtual ?? 0,
         dados.estoqueMinimo ?? 0,

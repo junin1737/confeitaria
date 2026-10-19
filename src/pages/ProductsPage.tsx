@@ -87,6 +87,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
   const [formGrupoId, setFormGrupoId] = useState<number | null>(null);
   const [formSubgrupoId, setFormSubgrupoId] = useState<number | null>(null);
   const [formUnidadeVenda, setFormUnidadeVenda] = useState("unidade");
+  const [formPrecoCusto, setFormPrecoCusto] = useState<number>(0);
   const [formPrecoVenda, setFormPrecoVenda] = useState<number>(0);
   const [formEstoqueAtual, setFormEstoqueAtual] = useState<number>(0);
   const [formEstoqueMinimo, setFormEstoqueMinimo] = useState<number>(0);
@@ -193,6 +194,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     setFormGrupoId(p.grupoId);
     setFormSubgrupoId(p.subgrupoId);
     setFormUnidadeVenda(p.unidadeVenda || "unidade");
+    setFormPrecoCusto(p.precoCusto || 0);
     setFormPrecoVenda(p.precoVenda || 0);
     setFormEstoqueAtual(p.estoqueAtual || 0);
     setFormEstoqueMinimo(p.estoqueMinimo || 0);
@@ -235,6 +237,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     setFormGrupoId(grupos[0]?.id || null);
     setFormSubgrupoId(null);
     setFormUnidadeVenda("unidade");
+    setFormPrecoCusto(0);
     setFormPrecoVenda(0);
     setFormEstoqueAtual(0);
     setFormEstoqueMinimo(0);
@@ -267,15 +270,19 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
   const custoTotalProducaoForm = custoInsumosForm + custoMaoDeObraForm + custosFixosForm;
   const rendimentoValido = Math.max(1, formRendimentoQtd);
   const custoPorUnidadeForm = custoTotalProducaoForm / rendimentoValido;
+  const custoEfetivoForm = formPrecoCusto > 0 ? formPrecoCusto : custoPorUnidadeForm;
 
   const precoSugeridoTotalForm = custoTotalProducaoForm * (1 + formMargemLucroDesejada / 100);
-  const precoSugeridoPorUnidadeForm = precoSugeridoTotalForm / rendimentoValido;
+  const precoSugeridoPorUnidadeForm =
+    formPrecoCusto > 0 && formMargemLucroDesejada > 0
+      ? formPrecoCusto * (1 + formMargemLucroDesejada / 100)
+      : precoSugeridoTotalForm / rendimentoValido;
 
   const precoCobrado = formPrecoVenda > 0 ? formPrecoVenda : precoSugeridoPorUnidadeForm;
-  const lucroRealPorUnidadeForm = precoCobrado - custoPorUnidadeForm;
+  const lucroRealPorUnidadeForm = precoCobrado - custoEfetivoForm;
   const margemRealCalculada =
-    custoPorUnidadeForm > 0
-      ? Math.round((lucroRealPorUnidadeForm / custoPorUnidadeForm) * 100)
+    custoEfetivoForm > 0
+      ? Math.round((lucroRealPorUnidadeForm / custoEfetivoForm) * 100)
       : 0;
 
   // Itens da receita do formulário
@@ -330,6 +337,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
         grupoId: formGrupoId,
         subgrupoId: formSubgrupoId,
         unidadeVenda: formUnidadeVenda,
+        precoCusto: formPrecoCusto > 0 ? formPrecoCusto : (custoPorUnidadeForm > 0 ? custoPorUnidadeForm : 0),
         precoVenda: formPrecoVenda || precoSugeridoPorUnidadeForm,
         estoqueAtual: formEstoqueAtual,
         estoqueMinimo: formEstoqueMinimo,
@@ -523,7 +531,8 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                     <strong>{item.nome}</strong>
                     <span>
                       {item.codigo} • {item.grupoNome || "Sem grupo"} •{" "}
-                      <b style={{ color: "var(--c-text)" }}>R$ {item.precoVenda.toFixed(2)}</b>
+                      <span style={{ color: "var(--c-muted)" }}>Custo: R$ {item.precoCusto.toFixed(2)}</span> •{" "}
+                      <b style={{ color: "var(--c-text)" }}>Venda: R$ {item.precoVenda.toFixed(2)}</b>
                     </span>
                   </div>
                   <div
@@ -627,13 +636,13 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                 </div>
                 <div>
                   <span>Custo Atual</span>
-                  <strong>R$ {custoPorUnidadeForm.toFixed(2)}</strong>
-                  <small>Insumos + Mão de Obra + Fixos</small>
+                  <strong>R$ {custoEfetivoForm.toFixed(2)}</strong>
+                  <small>{formPrecoCusto > 0 ? "Preço de custo definido" : "Insumos + Mão de Obra + Fixos"}</small>
                 </div>
                 <div>
                   <span>Custo Médio (12m)</span>
                   <strong style={{ color: "#4f7c9b" }}>
-                    R$ {(selectedId !== "new" && selectedId != null ? produtos.find((p) => p.id === selectedId)?.custoMedio ?? custoPorUnidadeForm : custoPorUnidadeForm).toFixed(2)}
+                    R$ {(selectedId !== "new" && selectedId != null ? produtos.find((p) => p.id === selectedId)?.custoMedio ?? custoEfetivoForm : custoEfetivoForm).toFixed(2)}
                   </strong>
                   <small>Média dos últimos 12 meses</small>
                 </div>
@@ -844,20 +853,68 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                         </div>
                       </div>
 
-                      <div className="field">
-                        <label>Preço de Venda Praticado (R$) *</label>
-                        <input
-                          type="number"
-                          step="0.50"
-                          min="0"
-                          value={formPrecoVenda}
-                          onChange={(e) => setFormPrecoVenda(Number(e.target.value))}
-                          placeholder="Valor cobrado do cliente"
-                          style={{ fontSize: "16px", fontWeight: "bold", color: "var(--c-primary)" }}
-                        />
-                        <small style={{ color: "var(--c-muted)", fontSize: "10px", marginTop: "3px" }}>
-                          Sugerido pela ficha técnica: <b>R$ {precoSugeridoPorUnidadeForm.toFixed(2)}</b>
-                        </small>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                        <div className="field">
+                          <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span>Preço de Custo (R$)</span>
+                            {formTemReceita && custoPorUnidadeForm > 0 && (
+                              <button
+                                type="button"
+                                className="text-button"
+                                style={{ fontSize: "11px", color: "var(--c-primary)", textDecoration: "underline", padding: 0 }}
+                                onClick={() => setFormPrecoCusto(Number(custoPorUnidadeForm.toFixed(2)))}
+                                title="Preencher com o custo calculado da receita"
+                              >
+                                Usar da receita (R$ {custoPorUnidadeForm.toFixed(2)})
+                              </button>
+                            )}
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={formPrecoCusto || ""}
+                            onChange={(e) => setFormPrecoCusto(Number(e.target.value))}
+                            placeholder={custoPorUnidadeForm > 0 ? custoPorUnidadeForm.toFixed(2) : "0,00"}
+                            style={{ fontSize: "15px", fontWeight: "600" }}
+                          />
+                          <small style={{ color: "var(--c-muted)", fontSize: "10px", marginTop: "3px", display: "block" }}>
+                            {formTemReceita && custoPorUnidadeForm > 0
+                              ? `Custo da ficha técnica: R$ ${custoPorUnidadeForm.toFixed(2)} / ${formUnidadeVenda}`
+                              : "Custo de compra ou fabricação unitária"}
+                          </small>
+                        </div>
+
+                        <div className="field">
+                          <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span>Preço de Venda Praticado (R$) *</span>
+                            {precoSugeridoPorUnidadeForm > 0 && (
+                              <button
+                                type="button"
+                                className="text-button"
+                                style={{ fontSize: "11px", color: "var(--c-primary)", textDecoration: "underline", padding: 0 }}
+                                onClick={() => setFormPrecoVenda(Number(precoSugeridoPorUnidadeForm.toFixed(2)))}
+                                title="Usar o preço sugerido com a margem desejada"
+                              >
+                                Usar sugerido (R$ {precoSugeridoPorUnidadeForm.toFixed(2)})
+                              </button>
+                            )}
+                          </label>
+                          <input
+                            type="number"
+                            step="0.50"
+                            min="0"
+                            value={formPrecoVenda || ""}
+                            onChange={(e) => setFormPrecoVenda(Number(e.target.value))}
+                            placeholder="Valor cobrado do cliente"
+                            style={{ fontSize: "15px", fontWeight: "bold", color: "var(--c-primary)" }}
+                            required
+                          />
+                          <small style={{ color: "var(--c-muted)", fontSize: "10px", marginTop: "3px", display: "block" }}>
+                            Sugerido: <b>R$ {precoSugeridoPorUnidadeForm.toFixed(2)}</b>
+                            {formMargemLucroDesejada > 0 ? ` (${formMargemLucroDesejada}% margem)` : ""}
+                          </small>
+                        </div>
                       </div>
 
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>

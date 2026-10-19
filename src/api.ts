@@ -1009,6 +1009,7 @@ export type ProdutoInput = {
   grupoId?: number | null;
   subgrupoId?: number | null;
   unidadeVenda?: string;
+  precoCusto?: number;
   precoVenda?: number;
   estoqueAtual?: number;
   estoqueMinimo?: number;
