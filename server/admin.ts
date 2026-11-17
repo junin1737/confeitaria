@@ -20,7 +20,7 @@ import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { db } from "./db/client";
 import { garantirMensagens } from "./mensagens";
-import { seedTiposItemPadrao } from "./db/seed";
+import { seedTiposItemPadrao, seedUnidadesMedidaPadrao } from "./db/seed";
 import { seedPlanoContasPadrao, seedCentrosCustoPadrao } from "./financeiro";
 
 /**
@@ -207,6 +207,120 @@ export async function obterEmpresaAdmin(id: number): Promise<EmpresaAdmin | null
 }
 
 /**
+ * [FUNÇÃO AUXILIAR: normalizarTelefone]
+ * Extrai apenas os dígitos numéricos de um telefone/celular, removendo DDI 55 e zero inicial de DDD.
+ */
+export function normalizarTelefone(valor: unknown): string {
+  let digitos = String(valor ?? "").replace(/\D/g, "");
+  if (digitos.startsWith("55") && (digitos.length === 12 || digitos.length === 13)) {
+    digitos = digitos.slice(2);
+  }
+  if (digitos.startsWith("0") && (digitos.length === 11 || digitos.length === 12)) {
+    digitos = digitos.slice(1);
+  }
+  return digitos;
+}
+
+/**
+ * [FUNÇÃO AUXILIAR: verificarDuplicidadeConta]
+ * Verifica se o e-mail ou número de celular/WhatsApp já estão vinculados a outra conta/empresa no sistema.
+ */
+export async function verificarDuplicidadeConta(opcoes: {
+  email?: string | null;
+  telefones?: (string | null | undefined)[];
+  ignorarEmpresaId?: number;
+}): Promise<string | null> {
+  const ignorarId = opcoes.ignorarEmpresaId ?? 0;
+  const emailLimpo = String(opcoes.email ?? "").trim().toLowerCase();
+  const telefonesAlvo = Array.from(
+    new Set((opcoes.telefones ?? []).map(normalizarTelefone).filter((t) => t.length >= 8)),
+  );
+
+  let emailDuplicado = false;
+  let telefoneDuplicado = false;
+
+  if (emailLimpo) {
+    const [checkUsuario, checkEmpresa] = await Promise.all([
+      db.execute({
+        sql: `SELECT id FROM tb_usuario
+              WHERE (LOWER(TRIM(login)) = ? OR LOWER(TRIM(COALESCE(email, ''))) = ?)
+                AND empresa_id != ?
+              LIMIT 1`,
+        args: [emailLimpo, emailLimpo, ignorarId],
+      }),
+      db.execute({
+        sql: `SELECT id FROM tb_empresa
+              WHERE LOWER(TRIM(COALESCE(email, ''))) = ?
+                AND id != ?
+              LIMIT 1`,
+        args: [emailLimpo, ignorarId],
+      }),
+    ]);
+
+    if (checkUsuario.rows.length > 0 || checkEmpresa.rows.length > 0) {
+      emailDuplicado = true;
+    }
+  }
+
+  if (telefonesAlvo.length > 0) {
+    const [empresasRes, funcionariosRes] = await Promise.all([
+      db.execute({
+        sql: `SELECT id, telefone, ddd_telefone, celular, ddd_celular
+              FROM tb_empresa
+              WHERE id != ?`,
+        args: [ignorarId],
+      }),
+      db.execute({
+        sql: `SELECT id, telefone, celular
+              FROM tb_funcionario
+              WHERE empresa_id != ?`,
+        args: [ignorarId],
+      }),
+    ]);
+
+    for (const row of empresasRes.rows) {
+      const candidatos = [
+        normalizarTelefone(row.telefone),
+        normalizarTelefone(`${row.ddd_telefone ?? ""}${row.telefone ?? ""}`),
+        normalizarTelefone(row.celular),
+        normalizarTelefone(`${row.ddd_celular ?? ""}${row.celular ?? ""}`),
+      ].filter((t) => t.length >= 8);
+
+      if (candidatos.some((c) => telefonesAlvo.includes(c))) {
+        telefoneDuplicado = true;
+        break;
+      }
+    }
+
+    if (!telefoneDuplicado) {
+      for (const row of funcionariosRes.rows) {
+        const candidatos = [
+          normalizarTelefone(row.telefone),
+          normalizarTelefone(row.celular),
+        ].filter((t) => t.length >= 8);
+
+        if (candidatos.some((c) => telefonesAlvo.includes(c))) {
+          telefoneDuplicado = true;
+          break;
+        }
+      }
+    }
+  }
+
+  if (emailDuplicado && telefoneDuplicado) {
+    return "Já existe uma conta cadastrada com este e-mail e celular/WhatsApp.";
+  }
+  if (emailDuplicado) {
+    return "Já existe uma conta cadastrada com este e-mail.";
+  }
+  if (telefoneDuplicado) {
+    return "Já existe uma conta cadastrada com este celular/WhatsApp.";
+  }
+
+  return null;
+}
+
+/**
  * [FUNÇÃO: criarEmpresaAdmin]
  * Provisiona uma nova empresa (tenant) completa no sistema:
  * 1. Insere o registro na tb_empresa com status 'ativa', plano e serial.
@@ -223,31 +337,33 @@ export async function criarEmpresaAdmin(dados: {
   diasValidade?: number;
   senhaAdmin?: string;
 }) {
-  const nome = dados.nome.trim();
-  const email = dados.email.trim().toLowerCase();
-  const telefone = dados.telefone?.trim();
+  const nome = String(dados.nome ?? "").trim();
+  const email = String(dados.email ?? "").trim().toLowerCase();
+  const telefone = String(dados.telefone ?? "").trim();
+  const telefoneLimpo = normalizarTelefone(telefone);
   const nomeUsuario = dados.nomeCompletoUsuario?.trim() || `Admin ${nome}`;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   if (!nome) {
     return { erro: "Nome da empresa/ateliê é obrigatório." };
   }
-  if (!email || !email.includes("@")) {
+  if (!email || !emailRegex.test(email)) {
     return { erro: "Informe um e-mail válido para login." };
   }
-  if (!telefone) {
-    return { erro: "Telefone/WhatsApp de contato é obrigatório." };
+  if (!telefoneLimpo || telefoneLimpo.length < 10 || telefoneLimpo.length > 11) {
+    return { erro: "Informe um número de celular/WhatsApp válido com DDD (10 ou 11 dígitos)." };
   }
   if (dados.nomeCompletoUsuario !== undefined && !nomeUsuario) {
     return { erro: "Nome completo do usuário é obrigatório." };
   }
 
-  // Impede duplicidade de e-mail no sistema
-  const check = await db.execute({
-    sql: "SELECT id FROM tb_usuario WHERE login = ? OR email = ?",
-    args: [email, email],
+  // Impede duplicidade de e-mail e celular/WhatsApp no sistema
+  const erroDuplicidade = await verificarDuplicidadeConta({
+    email,
+    telefones: [telefoneLimpo],
   });
-  if (check.rows.length > 0) {
-    return { erro: "Já existe uma empresa ou usuário cadastrado com este e-mail." };
+  if (erroDuplicidade) {
+    return { erro: erroDuplicidade };
   }
 
   const plano = dados.plano || "trial";
@@ -256,15 +372,23 @@ export async function criarEmpresaAdmin(dados: {
   const serial = gerarSerial();
   const slug = gerarSlug(nome);
   const agora = new Date().toISOString();
+  const dddCelular = telefoneLimpo.slice(0, 2);
+  const numeroCelular = telefoneLimpo.slice(2);
 
   // Insere a empresa
   const insertEmpresa = await db.execute({
-    sql: `INSERT INTO tb_empresa (nome, email, telefone, documento, status, plano, serial_key, expira_em, slug, criado_em)
-          VALUES (?, ?, ?, ?, 'ativa', ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO tb_empresa (
+            nome, email, telefone, ddd_celular, celular, responsavel, documento,
+            status, plano, serial_key, expira_em, slug, criado_em
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'ativa', ?, ?, ?, ?, ?)`,
     args: [
       nome,
       email,
-      telefone,
+      telefoneLimpo,
+      dddCelular,
+      numeroCelular,
+      nomeUsuario,
       dados.documento?.trim() ?? null,
       plano,
       serial,
@@ -288,6 +412,7 @@ export async function criarEmpresaAdmin(dados: {
   // Provisiona mensagens e dados iniciais
   await garantirMensagens(empresaId);
   await seedTiposItemPadrao(empresaId);
+  await seedUnidadesMedidaPadrao(empresaId);
   await seedPlanoContasPadrao(empresaId);
   await seedCentrosCustoPadrao(empresaId);
 
@@ -435,6 +560,23 @@ export async function atualizarFichaEmpresa(
   empresaId: number,
   dados: Partial<EmpresaAdmin>
 ) {
+  const emailNormalizado = dados.email?.trim().toLowerCase() || null;
+
+  const erroDuplicidade = await verificarDuplicidadeConta({
+    email: emailNormalizado,
+    telefones: [
+      dados.telefone,
+      `${dados.dddTelefone ?? ""}${dados.telefone ?? ""}`,
+      dados.celular,
+      `${dados.dddCelular ?? ""}${dados.celular ?? ""}`,
+    ],
+    ignorarEmpresaId: empresaId,
+  });
+
+  if (erroDuplicidade) {
+    throw new Error(erroDuplicidade);
+  }
+
   await db.execute({
     sql: `UPDATE tb_empresa SET
             nome = COALESCE(?, nome),
@@ -490,7 +632,7 @@ export async function atualizarFichaEmpresa(
       dados.fax?.trim() || null,
       dados.dddCelular?.trim() || null,
       dados.celular?.trim() || null,
-      dados.email?.trim() || null,
+      emailNormalizado,
       dados.site?.trim() || null,
       dados.ramoAtividade?.trim() || null,
       dados.cnae?.trim() || null,

@@ -632,8 +632,13 @@ export async function migrate() {
   // Migrações incrementais na tabela de usuários
   await ensureColumn("tb_usuario", "email", "TEXT");
 
-  // Migrações incrementais na tabela de insumos (vínculo com fornecedor)
+  // Migrações incrementais na tabela de insumos (vínculo com fornecedor e campos completos de estoque)
   await ensureColumn("tb_insumo", "fornecedor_id", "INTEGER REFERENCES tb_fornecedor(id)");
+  await ensureColumn("tb_insumo", "codigo", "TEXT");
+  await ensureColumn("tb_insumo", "local_armazenamento", "TEXT");
+  await ensureColumn("tb_insumo", "observacoes", "TEXT");
+  await ensureColumn("tb_insumo", "status", "TEXT DEFAULT 'ativo'");
+  await ensureColumn("tb_insumo", "atualizado_em", "TEXT");
 
   // Migrações incrementais na tabela de produtos (vínculo com tipo de item)
   await ensureColumn("tb_produto", "tipo_item_id", "INTEGER REFERENCES tb_tipo_item(id)");

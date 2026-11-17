@@ -224,6 +224,38 @@ async function cpfEmUso(empresaId: number, cpf: string, ignoreId?: number) {
 }
 
 /**
+ * [FUNÇÃO: emailEmUso]
+ * Verifica a duplicidade de e-mail entre funcionários dentro da mesma empresa.
+ */
+async function emailEmUso(empresaId: number, email: string, ignoreId?: number) {
+  if (!email) return false;
+  const result = await db.execute({
+    sql: `SELECT id FROM tb_funcionario
+          WHERE empresa_id = ? AND LOWER(TRIM(COALESCE(email, ''))) = ? AND id != ?`,
+    args: [empresaId, email.toLowerCase(), ignoreId ?? 0],
+  });
+  return Boolean(result.rows[0]);
+}
+
+/**
+ * [FUNÇÃO: celularEmUso]
+ * Verifica a duplicidade de celular entre funcionários dentro da mesma empresa.
+ */
+async function celularEmUso(empresaId: number, celular: string, ignoreId?: number) {
+  if (!celular) return false;
+  const result = await db.execute({
+    sql: `SELECT id, celular, telefone FROM tb_funcionario
+          WHERE empresa_id = ? AND id != ?`,
+    args: [empresaId, ignoreId ?? 0],
+  });
+  return result.rows.some((row) => {
+    const celExistente = digits(row.celular);
+    const telExistente = digits(row.telefone);
+    return (celExistente && celExistente === celular) || (telExistente && telExistente === celular);
+  });
+}
+
+/**
  * [FUNÇÃO: validarPayload]
  * Valida todos os campos submetidos no formulário (nome, CPF, senha, valores).
  */
@@ -283,6 +315,12 @@ export async function criarFuncionario(empresaId: number, body: FuncionarioInput
   if (await cpfEmUso(empresaId, parsed.cpf)) {
     return { erro: "Já existe um funcionário com este CPF." };
   }
+  if (await emailEmUso(empresaId, parsed.email)) {
+    return { erro: "Já existe um funcionário cadastrado com este e-mail." };
+  }
+  if (await celularEmUso(empresaId, parsed.celular || parsed.telefone)) {
+    return { erro: "Já existe um funcionário cadastrado com este celular/telefone." };
+  }
 
   const codigo = await proximoCodigo(empresaId);
   const senhaHash = bcrypt.hashSync(parsed.senha, 10);
@@ -334,6 +372,12 @@ export async function atualizarFuncionario(empresaId: number, id: number, body: 
   }
   if (await cpfEmUso(empresaId, parsed.cpf, id)) {
     return { erro: "Já existe um funcionário com este CPF." };
+  }
+  if (await emailEmUso(empresaId, parsed.email, id)) {
+    return { erro: "Já existe um funcionário cadastrado com este e-mail." };
+  }
+  if (await celularEmUso(empresaId, parsed.celular || parsed.telefone, id)) {
+    return { erro: "Já existe um funcionário cadastrado com este celular/telefone." };
   }
 
   const senhaHash = parsed.senha ? bcrypt.hashSync(parsed.senha, 10) : undefined;

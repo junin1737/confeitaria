@@ -12,6 +12,7 @@
 
 import { db } from "./db/client";
 import { gerarTitulosDeCompra, cancelarTitulosDeCompra } from "./financeiro";
+import { normalizarUnidadeECusto, recalcularReceitasPorInsumo } from "./precificacao";
 
 const NOW = () => new Date().toISOString();
 
@@ -193,16 +194,57 @@ export async function registrarEntradaNota(
       ],
     });
 
-    // Se for associado a um Insumo cadastrado: soma estoque e atualiza custo de compra
+    // Se for associado a um Insumo cadastrado: soma estoque (convertido para unidade base) e atualiza custo
     if (item.insumoId) {
-      await db.execute({
-        sql: `UPDATE tb_insumo
-              SET estoque_atual = estoque_atual + ?,
-                  preco_compra = ?,
-                  custo_unitario = (? / CASE WHEN quantidade_embalagem > 0 THEN quantidade_embalagem ELSE 1 END)
+      const insRes = await db.execute({
+        sql: `SELECT id, unidade_compra, unidade_medida, quantidade_embalagem, preco_compra, fornecedor_id
+              FROM tb_insumo
               WHERE empresa_id = ? AND id = ?`,
-        args: [item.quantidade, item.valorUnitario, item.valorUnitario, empresaId, item.insumoId],
+        args: [empresaId, item.insumoId],
       });
+      const insRow = insRes.rows[0];
+      if (insRow) {
+        const unidCompra = String(insRow.unidade_compra || "g");
+        const unidMedida = String(insRow.unidade_medida || "g");
+        const qtdEmb = Number(insRow.quantidade_embalagem || 1);
+        const { custoUnitario, quantidadeTotalBase } = normalizarUnidadeECusto(
+          unidCompra,
+          unidMedida,
+          qtdEmb,
+          item.valorUnitario,
+        );
+
+        // Converte quantidade comprada na nota para a unidade de medida do estoque
+        let qtdEntradaEstoque = item.quantidade;
+        if (unidCompra === "kg" && unidMedida === "g") {
+          qtdEntradaEstoque = item.quantidade * 1000;
+        } else if (unidCompra === "l" && unidMedida === "ml") {
+          qtdEntradaEstoque = item.quantidade * 1000;
+        } else if (qtdEmb > 1 && item.quantidade < qtdEmb) {
+          qtdEntradaEstoque = item.quantidade * quantidadeTotalBase;
+        }
+
+        await db.execute({
+          sql: `UPDATE tb_insumo
+                SET estoque_atual = ROUND(COALESCE(estoque_atual, 0) + ?, 3),
+                    preco_compra = ?,
+                    custo_unitario = ?,
+                    fornecedor_id = COALESCE(?, fornecedor_id),
+                    atualizado_em = ?
+                WHERE empresa_id = ? AND id = ?`,
+          args: [
+            qtdEntradaEstoque,
+            item.valorUnitario,
+            custoUnitario,
+            dados.fornecedorId || null,
+            NOW(),
+            empresaId,
+            item.insumoId,
+          ],
+        });
+
+        await recalcularReceitasPorInsumo(empresaId, item.insumoId);
+      }
     }
 
     // Se for associado a um Produto acabado (ex: mercadoria p/ revenda): soma estoque

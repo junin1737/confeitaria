@@ -30,9 +30,10 @@ import { db } from "./db/client";
  */
 export type Insumo = {
   id: number;
+  codigo: string;
   nome: string;
   categoria: "ingrediente" | "embalagem" | "decoracao" | "outro";
-  unidadeMedida: "g" | "ml" | "un";
+  unidadeMedida: "g" | "ml" | "un" | "kg" | "l";
   unidadeCompra: "kg" | "g" | "l" | "ml" | "un";
   quantidadeEmbalagem: number;
   precoCompra: number;
@@ -40,25 +41,66 @@ export type Insumo = {
   estoqueAtual: number;
   estoqueMinimo: number;
   marca: string | null;
+  fornecedorId: number | null;
+  fornecedorNome: string | null;
+  localArmazenamento: string | null;
+  observacoes: string | null;
+  status: "ativo" | "inativo";
   criadoEm: string;
+  atualizadoEm: string | null;
+  produtosVinculados?: {
+    id: number;
+    codigo: string;
+    nome: string;
+    quantidade: number;
+    unidade: string;
+  }[];
 };
 
 export type InsumoInput = {
   id?: number;
+  codigo?: string;
   nome: string;
   categoria?: "ingrediente" | "embalagem" | "decoracao" | "outro";
-  unidadeMedida?: "g" | "ml" | "un";
+  unidadeMedida?: "g" | "ml" | "un" | "kg" | "l";
   unidadeCompra?: "kg" | "g" | "l" | "ml" | "un";
   quantidadeEmbalagem: number;
   precoCompra: number;
   estoqueAtual?: number;
   estoqueMinimo?: number;
   marca?: string;
+  fornecedorId?: number | null;
+  localArmazenamento?: string;
+  observacoes?: string;
+  status?: "ativo" | "inativo";
 };
 
 /**
+ * [FUNÇÃO: proximoCodigoInsumo]
+ * Gera o próximo código sequencial do insumo (INS-001, INS-002, ...).
+ */
+export async function proximoCodigoInsumo(empresaId: number): Promise<string> {
+  const result = await db.execute({
+    sql: "SELECT codigo FROM tb_insumo WHERE empresa_id = ?",
+    args: [empresaId],
+  });
+
+  let maxNum = 0;
+  for (const row of result.rows) {
+    const raw = String(row.codigo || "");
+    const match = raw.match(/\d+/);
+    if (match) {
+      const val = parseInt(match[0], 10);
+      if (!isNaN(val) && val > maxNum) maxNum = val;
+    }
+  }
+
+  return `INS-${String(maxNum + 1).padStart(3, "0")}`;
+}
+
+/**
  * [FUNÇÃO AUXILIAR: normalizarUnidadeECusto]
- * Converte a embalagem comprada para a unidade base de uso na receita (g, ml, un)
+ * Converte a embalagem comprada para a unidade base de uso na receita (g, ml, un, kg, l)
  * e calcula o custo unitário por grama, mililitro ou unidade.
  */
 export function normalizarUnidadeECusto(
@@ -73,9 +115,17 @@ export function normalizarUnidadeECusto(
   if (unidadeCompra === "kg" && unidadeMedida === "g") {
     fator = 1000;
   }
+  // Se comprou em g e mede em kg: 1000g = 1kg
+  else if (unidadeCompra === "g" && unidadeMedida === "kg") {
+    fator = 0.001;
+  }
   // Se comprou em L e mede em ml: 1L = 1000ml
   else if (unidadeCompra === "l" && unidadeMedida === "ml") {
     fator = 1000;
+  }
+  // Se comprou em ml e mede em L: 1000ml = 1L
+  else if (unidadeCompra === "ml" && unidadeMedida === "l") {
+    fator = 0.001;
   }
 
   const quantidadeTotalBase = Math.max(0.0001, quantidadeEmbalagem * fator);
@@ -89,32 +139,103 @@ export function normalizarUnidadeECusto(
 
 /**
  * [INSUMOS: listarInsumos]
- * Retorna todos os insumos cadastrados para a empresa.
+ * Retorna todos os insumos cadastrados para a empresa, com fornecedor e produtos vinculados.
  */
 export async function listarInsumos(empresaId: number): Promise<Insumo[]> {
   const result = await db.execute({
-    sql: `SELECT id, nome, categoria, unidade_medida, unidade_compra, quantidade_embalagem,
-                 preco_compra, custo_unitario, estoque_atual, estoque_minimo, marca, criado_em
-          FROM tb_insumo
-          WHERE empresa_id = ?
-          ORDER BY categoria, nome`,
+    sql: `SELECT i.id, i.codigo, i.nome, i.categoria, i.unidade_medida, i.unidade_compra,
+                 i.quantidade_embalagem, i.preco_compra, i.custo_unitario, i.estoque_atual,
+                 i.estoque_minimo, i.marca, i.fornecedor_id, i.local_armazenamento,
+                 i.observacoes, i.status, i.criado_em, i.atualizado_em,
+                 COALESCE(f.nome_fantasia, f.razao_social) AS fornecedor_nome
+          FROM tb_insumo i
+          LEFT JOIN tb_fornecedor f ON f.id = i.fornecedor_id
+          WHERE i.empresa_id = ?
+          ORDER BY i.nome ASC`,
     args: [empresaId],
   });
 
-  return result.rows.map((row) => ({
-    id: Number(row.id),
-    nome: String(row.nome),
-    categoria: (row.categoria ?? "ingrediente") as Insumo["categoria"],
-    unidadeMedida: (row.unidade_medida ?? "g") as Insumo["unidadeMedida"],
-    unidadeCompra: (row.unidade_compra ?? "g") as Insumo["unidadeCompra"],
-    quantidadeEmbalagem: Number(row.quantidade_embalagem ?? 1),
-    precoCompra: Number(row.preco_compra ?? 0),
-    custoUnitario: Number(row.custo_unitario ?? 0),
-    estoqueAtual: Number(row.estoque_atual ?? 0),
-    estoqueMinimo: Number(row.estoque_minimo ?? 0),
-    marca: row.marca ? String(row.marca) : null,
-    criadoEm: String(row.criado_em),
-  }));
+  // Backfill de código interno caso algum insumo antigo ainda não tenha
+  let maxNum = 0;
+  for (const row of result.rows) {
+    const raw = String(row.codigo || "");
+    const m = raw.match(/\d+/);
+    if (m) {
+      const val = parseInt(m[0], 10);
+      if (!isNaN(val) && val > maxNum) maxNum = val;
+    }
+  }
+
+  const codigosMap = new Map<number, string>();
+  for (const row of result.rows) {
+    const id = Number(row.id);
+    const codAtual = row.codigo ? String(row.codigo).trim() : "";
+    if (!codAtual) {
+      maxNum += 1;
+      const novoCod = `INS-${String(maxNum).padStart(3, "0")}`;
+      codigosMap.set(id, novoCod);
+      await db.execute({
+        sql: "UPDATE tb_insumo SET codigo = ? WHERE id = ? AND empresa_id = ?",
+        args: [novoCod, id, empresaId],
+      });
+    } else {
+      codigosMap.set(id, codAtual);
+    }
+  }
+
+  // Busca vínculos com produtos (fichas técnicas) da empresa
+  const vinculosRes = await db.execute({
+    sql: `SELECT pi.insumo_id, pi.quantidade, pi.unidade,
+                 p.id AS produto_id, p.codigo AS produto_codigo, p.nome AS produto_nome
+          FROM tb_produto_insumo pi
+          INNER JOIN tb_produto p ON p.id = pi.produto_id
+          WHERE p.empresa_id = ?
+          ORDER BY p.nome ASC`,
+    args: [empresaId],
+  });
+
+  const vinculosPorInsumo = new Map<
+    number,
+    { id: number; codigo: string; nome: string; quantidade: number; unidade: string }[]
+  >();
+  for (const vRow of vinculosRes.rows) {
+    const insId = Number(vRow.insumo_id);
+    const lista = vinculosPorInsumo.get(insId) ?? [];
+    lista.push({
+      id: Number(vRow.produto_id),
+      codigo: String(vRow.produto_codigo || ""),
+      nome: String(vRow.produto_nome || ""),
+      quantidade: Number(vRow.quantidade ?? 0),
+      unidade: String(vRow.unidade || "g"),
+    });
+    vinculosPorInsumo.set(insId, lista);
+  }
+
+  return result.rows.map((row) => {
+    const id = Number(row.id);
+    return {
+      id,
+      codigo: codigosMap.get(id) || `INS-${String(id).padStart(3, "0")}`,
+      nome: String(row.nome),
+      categoria: (row.categoria ?? "ingrediente") as Insumo["categoria"],
+      unidadeMedida: (row.unidade_medida ?? "g") as Insumo["unidadeMedida"],
+      unidadeCompra: (row.unidade_compra ?? "g") as Insumo["unidadeCompra"],
+      quantidadeEmbalagem: Number(row.quantidade_embalagem ?? 1),
+      precoCompra: Number(row.preco_compra ?? 0),
+      custoUnitario: Number(row.custo_unitario ?? 0),
+      estoqueAtual: Number(row.estoque_atual ?? 0),
+      estoqueMinimo: Number(row.estoque_minimo ?? 0),
+      marca: row.marca ? String(row.marca) : null,
+      fornecedorId: row.fornecedor_id ? Number(row.fornecedor_id) : null,
+      fornecedorNome: row.fornecedor_nome ? String(row.fornecedor_nome) : null,
+      localArmazenamento: row.local_armazenamento ? String(row.local_armazenamento) : null,
+      observacoes: row.observacoes ? String(row.observacoes) : null,
+      status: String(row.status || "ativo") === "inativo" ? "inativo" : "ativo",
+      criadoEm: String(row.criado_em),
+      atualizadoEm: row.atualizado_em ? String(row.atualizado_em) : null,
+      produtosVinculados: vinculosPorInsumo.get(id) ?? [],
+    };
+  });
 }
 
 /**
@@ -127,17 +248,44 @@ export async function obterInsumo(empresaId: number, id: number): Promise<Insumo
 
 /**
  * [INSUMOS: salvarInsumo]
- * Cria ou atualiza um insumo e recalcula o custo unitário.
+ * Cria ou atualiza um insumo, valida duplicidade de nome, persiste fornecedor e recalcula custos.
  */
 export async function salvarInsumo(empresaId: number, dados: InsumoInput) {
-  const nome = dados.nome.trim();
+  const nome = String(dados.nome ?? "").trim();
   if (!nome) return { erro: "Informe o nome do insumo/ingrediente." };
 
+  const quantidadeEmbalagem = Number(dados.quantidadeEmbalagem ?? 0);
+  if (isNaN(quantidadeEmbalagem) || quantidadeEmbalagem <= 0) {
+    return { erro: "A quantidade na embalagem deve ser maior que zero." };
+  }
+
+  const precoCompra = Number(dados.precoCompra ?? 0);
+  if (isNaN(precoCompra) || precoCompra <= 0) {
+    return { erro: "O preço pago na embalagem deve ser maior que zero." };
+  }
+
+  // Verifica duplicidade de nome na mesma empresa
+  const checkNome = await db.execute({
+    sql: `SELECT id, nome FROM tb_insumo
+          WHERE empresa_id = ? AND LOWER(TRIM(nome)) = ? AND id != ?
+          LIMIT 1`,
+    args: [empresaId, nome.toLowerCase(), dados.id ?? 0],
+  });
+  if (checkNome.rows.length > 0) {
+    return { erro: `Já existe um insumo cadastrado com o nome "${checkNome.rows[0].nome}".` };
+  }
+
   const categoria = dados.categoria || "ingrediente";
-  const unidadeMedida = dados.unidadeMedida || (categoria === "embalagem" ? "un" : "g");
-  const unidadeCompra = dados.unidadeCompra || unidadeMedida;
-  const quantidadeEmbalagem = Math.max(0.001, Number(dados.quantidadeEmbalagem || 1));
-  const precoCompra = Math.max(0, Number(dados.precoCompra || 0));
+  const unidadeCompra = dados.unidadeCompra || (categoria === "embalagem" ? "un" : "g");
+  const unidadeMedida =
+    dados.unidadeMedida ||
+    (unidadeCompra === "kg" ? "g" : unidadeCompra === "l" ? "ml" : unidadeCompra);
+  const estoqueAtual = Number(dados.estoqueAtual ?? 0);
+  const estoqueMinimo = Math.max(0, Number(dados.estoqueMinimo ?? 0));
+  const fornecedorId = dados.fornecedorId ? Number(dados.fornecedorId) : null;
+  const localArmazenamento = dados.localArmazenamento?.trim() || null;
+  const observacoes = dados.observacoes?.trim() || null;
+  const status = dados.status === "inativo" ? "inativo" : "ativo";
 
   const { custoUnitario } = normalizarUnidadeECusto(
     unidadeCompra,
@@ -149,14 +297,17 @@ export async function salvarInsumo(empresaId: number, dados: InsumoInput) {
   const agora = new Date().toISOString();
 
   if (dados.id) {
-    // Atualização
+    const codigo = dados.codigo?.trim() || (await proximoCodigoInsumo(empresaId));
+    // Atualização completa
     await db.execute({
       sql: `UPDATE tb_insumo SET
-              nome = ?, categoria = ?, unidade_medida = ?, unidade_compra = ?,
+              codigo = ?, nome = ?, categoria = ?, unidade_medida = ?, unidade_compra = ?,
               quantidade_embalagem = ?, preco_compra = ?, custo_unitario = ?,
-              estoque_atual = ?, estoque_minimo = ?, marca = ?
+              estoque_atual = ?, estoque_minimo = ?, marca = ?, fornecedor_id = ?,
+              local_armazenamento = ?, observacoes = ?, status = ?, atualizado_em = ?
             WHERE empresa_id = ? AND id = ?`,
       args: [
+        codigo,
         nome,
         categoria,
         unidadeMedida,
@@ -164,29 +315,39 @@ export async function salvarInsumo(empresaId: number, dados: InsumoInput) {
         quantidadeEmbalagem,
         precoCompra,
         custoUnitario,
-        dados.estoqueAtual ?? 0,
-        dados.estoqueMinimo ?? 0,
+        estoqueAtual,
+        estoqueMinimo,
         dados.marca?.trim() || null,
+        fornecedorId,
+        localArmazenamento,
+        observacoes,
+        status,
+        agora,
         empresaId,
         dados.id,
       ],
     });
 
-    // Efeito cascata: atualiza preços sugeridos de receitas dependentes
+    // Efeito cascata: atualiza preços sugeridos e custos de receitas e produtos dependentes
     await recalcularReceitasPorInsumo(empresaId, dados.id);
 
-    return obterInsumo(empresaId, dados.id);
+    const atualizado = await obterInsumo(empresaId, dados.id);
+    return atualizado ?? { erro: "Insumo não encontrado após atualização." };
   }
+
+  const codigo = dados.codigo?.trim() || (await proximoCodigoInsumo(empresaId));
 
   // Inserção
   const created = await db.execute({
     sql: `INSERT INTO tb_insumo (
-            empresa_id, nome, categoria, unidade_medida, unidade_compra,
+            empresa_id, codigo, nome, categoria, unidade_medida, unidade_compra,
             quantidade_embalagem, preco_compra, custo_unitario, estoque_atual,
-            estoque_minimo, marca, criado_em
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            estoque_minimo, marca, fornecedor_id, local_armazenamento, observacoes,
+            status, criado_em, atualizado_em
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       empresaId,
+      codigo,
       nome,
       categoria,
       unidadeMedida,
@@ -194,32 +355,155 @@ export async function salvarInsumo(empresaId: number, dados: InsumoInput) {
       quantidadeEmbalagem,
       precoCompra,
       custoUnitario,
-      dados.estoqueAtual ?? 0,
-      dados.estoqueMinimo ?? 0,
+      estoqueAtual,
+      estoqueMinimo,
       dados.marca?.trim() || null,
+      fornecedorId,
+      localArmazenamento,
+      observacoes,
+      status,
+      agora,
       agora,
     ],
   });
 
-  return obterInsumo(empresaId, Number(created.lastInsertRowid));
+  const novo = await obterInsumo(empresaId, Number(created.lastInsertRowid));
+  return novo ?? { erro: "Falha ao carregar insumo recém-cadastrado." };
+}
+
+/**
+ * [INSUMOS: ajustarEstoqueInsumo]
+ * Realiza entrada rápida (compra avulsa), saída (baixa/perda/consumo) ou ajuste de inventário
+ * diretamente na tela de Estoque, permitindo informar em unidades base (g/ml/un) ou em embalagens.
+ */
+export async function ajustarEstoqueInsumo(
+  empresaId: number,
+  id: number,
+  dados: {
+    tipo: "entrada" | "saida" | "ajuste";
+    quantidade: number;
+    modoUnidade?: "base" | "embalagem";
+    novoPrecoCompra?: number;
+    motivo?: string;
+  },
+) {
+  const insumo = await obterInsumo(empresaId, id);
+  if (!insumo) {
+    return { erro: "Insumo não encontrado no estoque." };
+  }
+
+  const qtdInformada = Number(dados.quantidade ?? 0);
+  if (isNaN(qtdInformada) || (dados.tipo !== "ajuste" && qtdInformada <= 0) || (dados.tipo === "ajuste" && qtdInformada < 0)) {
+    return { erro: "Informe uma quantidade válida para movimentação de estoque." };
+  }
+
+  const { quantidadeTotalBase } = normalizarUnidadeECusto(
+    insumo.unidadeCompra,
+    insumo.unidadeMedida,
+    insumo.quantidadeEmbalagem,
+    insumo.precoCompra,
+  );
+
+  // Se o dono informou em "embalagem" (ex: +2 latas de 395g ou +3 pacotes de 1kg), converte para a base
+  const deltaBase =
+    dados.modoUnidade === "embalagem"
+      ? Math.round(qtdInformada * quantidadeTotalBase * 1000) / 1000
+      : qtdInformada;
+
+  let novoEstoque = insumo.estoqueAtual;
+  if (dados.tipo === "entrada") {
+    novoEstoque = Math.round((insumo.estoqueAtual + deltaBase) * 1000) / 1000;
+  } else if (dados.tipo === "saida") {
+    novoEstoque = Math.round((insumo.estoqueAtual - deltaBase) * 1000) / 1000;
+  } else {
+    novoEstoque = Math.round(deltaBase * 1000) / 1000;
+  }
+
+  let novoPrecoCompra = insumo.precoCompra;
+  let novoCustoUnitario = insumo.custoUnitario;
+  if (dados.novoPrecoCompra !== undefined && Number(dados.novoPrecoCompra) > 0) {
+    novoPrecoCompra = Number(dados.novoPrecoCompra);
+    novoCustoUnitario = normalizarUnidadeECusto(
+      insumo.unidadeCompra,
+      insumo.unidadeMedida,
+      insumo.quantidadeEmbalagem,
+      novoPrecoCompra,
+    ).custoUnitario;
+  }
+
+  const agora = new Date().toISOString();
+  await db.execute({
+    sql: `UPDATE tb_insumo
+          SET estoque_atual = ?, preco_compra = ?, custo_unitario = ?, atualizado_em = ?
+          WHERE empresa_id = ? AND id = ?`,
+    args: [novoEstoque, novoPrecoCompra, novoCustoUnitario, agora, empresaId, id],
+  });
+
+  if (novoPrecoCompra !== insumo.precoCompra) {
+    await recalcularReceitasPorInsumo(empresaId, id);
+  }
+
+  const atualizado = await obterInsumo(empresaId, id);
+  return atualizado ?? { erro: "Erro ao atualizar saldo do insumo." };
 }
 
 /**
  * [INSUMOS: excluirInsumo]
- * Remove o insumo caso ele não esteja sendo utilizado em nenhuma receita ativa.
+ * Remove o insumo caso ele não esteja vinculado a fichas técnicas de produtos, receitas, produções ou compras.
  */
 export async function excluirInsumo(empresaId: number, id: number) {
-  const check = await db.execute({
-    sql: `SELECT r.nome FROM tb_receita_item ri
-          INNER JOIN tb_receita r ON r.id = ri.receita_id
-          WHERE r.empresa_id = ? AND ri.insumo_id = ?
-          LIMIT 1`,
-    args: [empresaId, id],
-  });
+  const [checkProduto, checkReceita, checkProducao, checkCompra] = await Promise.all([
+    db.execute({
+      sql: `SELECT p.nome FROM tb_produto_insumo pi
+            INNER JOIN tb_produto p ON p.id = pi.produto_id
+            WHERE p.empresa_id = ? AND pi.insumo_id = ?
+            LIMIT 1`,
+      args: [empresaId, id],
+    }),
+    db.execute({
+      sql: `SELECT r.nome FROM tb_receita_item ri
+            INNER JOIN tb_receita r ON r.id = ri.receita_id
+            WHERE r.empresa_id = ? AND ri.insumo_id = ?
+            LIMIT 1`,
+      args: [empresaId, id],
+    }),
+    db.execute({
+      sql: `SELECT p.id FROM tb_producao_insumo pi
+            INNER JOIN tb_producao p ON p.id = pi.producao_id
+            WHERE p.empresa_id = ? AND pi.insumo_id = ?
+            LIMIT 1`,
+      args: [empresaId, id],
+    }),
+    db.execute({
+      sql: `SELECT c.numero_nota FROM tb_compra_item ci
+            INNER JOIN tb_compra_nota c ON c.id = ci.compra_id
+            WHERE c.empresa_id = ? AND ci.insumo_id = ?
+            LIMIT 1`,
+      args: [empresaId, id],
+    }),
+  ]);
 
-  if (check.rows.length > 0) {
+  if (checkProduto.rows.length > 0) {
     return {
-      erro: `Este insumo não pode ser excluído pois está em uso na receita "${check.rows[0].nome}".`,
+      erro: `Este insumo não pode ser excluído pois faz parte da ficha técnica do produto "${checkProduto.rows[0].nome}".`,
+    };
+  }
+
+  if (checkReceita.rows.length > 0) {
+    return {
+      erro: `Este insumo não pode ser excluído pois está em uso na receita "${checkReceita.rows[0].nome}".`,
+    };
+  }
+
+  if (checkProducao.rows.length > 0) {
+    return {
+      erro: "Este insumo possui histórico de ordens de produção realizadas e não pode ser excluído. Você pode inativá-lo.",
+    };
+  }
+
+  if (checkCompra.rows.length > 0) {
+    return {
+      erro: `Este insumo está vinculado à nota de compra nº ${checkCompra.rows[0].numero_nota} e não pode ser excluído. Você pode inativá-lo.`,
     };
   }
 
@@ -579,8 +863,8 @@ export async function excluirReceita(empresaId: number, id: number) {
 
 /**
  * [EFEITO CASCATA: recalcularReceitasPorInsumo]
- * Atualiza o 'atualizado_em' das receitas afetadas para que a interface e relatórios
- * reflitam a nova formação de custos em tempo real.
+ * Atualiza o 'atualizado_em' das receitas e recalcula o custo dos produtos (tb_produto)
+ * que utilizam este insumo em sua ficha técnica, registrando no histórico de evolução de custos.
  */
 export async function recalcularReceitasPorInsumo(empresaId: number, insumoId: number) {
   const agora = new Date().toISOString();
@@ -591,4 +875,73 @@ export async function recalcularReceitasPorInsumo(empresaId: number, insumoId: n
           )`,
     args: [agora, empresaId, insumoId],
   });
+
+  // Busca produtos vinculados a este insumo
+  const prodsAfetados = await db.execute({
+    sql: `SELECT DISTINCT p.id, p.rendimento_quantidade, p.tempo_preparo_minutos,
+                          p.custo_hora_trabalho, p.percentual_custos_fixos,
+                          p.margem_lucro_desejada, p.preco_venda
+          FROM tb_produto p
+          INNER JOIN tb_produto_insumo pi ON pi.produto_id = p.id
+          WHERE p.empresa_id = ? AND pi.insumo_id = ?`,
+    args: [empresaId, insumoId],
+  });
+
+  for (const prod of prodsAfetados.rows) {
+    const prodId = Number(prod.id);
+    const itensRes = await db.execute({
+      sql: `SELECT pi.quantidade, i.custo_unitario
+            FROM tb_produto_insumo pi
+            INNER JOIN tb_insumo i ON i.id = pi.insumo_id
+            WHERE pi.produto_id = ?`,
+      args: [prodId],
+    });
+
+    const itens = itensRes.rows.map((r) => ({
+      quantidade: Number(r.quantidade ?? 0),
+      custoUnitario: Number(r.custo_unitario ?? 0),
+    }));
+
+    const metricas = calcularTotaisReceita(
+      itens,
+      Number(prod.tempo_preparo_minutos ?? 60),
+      Number(prod.custo_hora_trabalho ?? 20),
+      Number(prod.percentual_custos_fixos ?? 15),
+      Number(prod.margem_lucro_desejada ?? 100),
+      Number(prod.rendimento_quantidade ?? 1),
+      Number(prod.preco_venda ?? 0),
+    );
+
+    await db.execute({
+      sql: `UPDATE tb_produto
+            SET preco_custo = ?, preco_sugerido = ?, atualizado_em = ?
+            WHERE empresa_id = ? AND id = ?`,
+      args: [
+        metricas.custoPorUnidade,
+        metricas.precoSugeridoPorUnidade,
+        agora,
+        empresaId,
+        prodId,
+      ],
+    });
+
+    await db.execute({
+      sql: `INSERT INTO tb_produto_custo_historico (
+              empresa_id, produto_id, data_hora, custo_producao, custo_insumos,
+              custo_mao_de_obra, custo_fixos, preco_venda, margem_lucro_real, motivo
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        empresaId,
+        prodId,
+        agora,
+        metricas.custoPorUnidade,
+        metricas.custoInsumos,
+        metricas.custoMaoDeObra,
+        metricas.custoFixos,
+        Number(prod.preco_venda ?? 0) || metricas.precoSugeridoPorUnidade,
+        metricas.margemRealPercentual,
+        "Recálculo automático por alteração de custo de insumo no estoque",
+      ],
+    });
+  }
 }

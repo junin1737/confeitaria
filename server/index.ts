@@ -47,6 +47,8 @@ import {
   obterInsumo,
   salvarInsumo,
   excluirInsumo,
+  proximoCodigoInsumo,
+  ajustarEstoqueInsumo,
   listarReceitas,
   obterReceita,
   salvarReceita,
@@ -383,7 +385,7 @@ async function start() {
       const atualizada = await atualizarFichaEmpresa(req.usuario!.empresaId, req.body ?? {});
       res.json({ ok: true, empresa: atualizada });
     } catch (e: any) {
-      res.status(500).json({ erro: e?.message || "Erro ao salvar dados da empresa." });
+      res.status(400).json({ erro: e?.message || "Erro ao salvar dados da empresa." });
     }
   });
 
@@ -674,17 +676,72 @@ async function start() {
     }
   });
 
+  // Próximo código sequencial de insumo (INS-001, INS-002...)
+  app.get("/api/insumos/proximo-codigo", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const codigo = await proximoCodigoInsumo(req.usuario!.empresaId);
+      res.json({ codigo });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao gerar código de insumo" });
+    }
+  });
+
+  // Consulta de insumo individual
+  app.get("/api/insumos/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const id = Number(req.params.id);
+      const insumo = await obterInsumo(req.usuario!.empresaId, id);
+      if (!insumo) {
+        res.status(404).json({ erro: "Insumo não encontrado" });
+        return;
+      }
+      res.json({ insumo });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao consultar insumo" });
+    }
+  });
+
   // Cadastro ou edição de insumo
   app.post("/api/insumos", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
     try {
       const result = await salvarInsumo(req.usuario!.empresaId, req.body);
-      if ("erro" in result) {
+      if (result && "erro" in result) {
         res.status(400).json({ erro: result.erro });
         return;
       }
       res.json({ insumo: result });
     } catch (e: any) {
       res.status(500).json({ erro: e?.message || "Erro ao salvar insumo" });
+    }
+  });
+
+  // Atualização de insumo via PUT
+  app.put("/api/insumos/:id", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const id = Number(req.params.id);
+      const result = await salvarInsumo(req.usuario!.empresaId, { ...req.body, id });
+      if (result && "erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json({ insumo: result });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao atualizar insumo" });
+    }
+  });
+
+  // Movimentação rápida de estoque (Entrada, Baixa/Perda ou Ajuste de Inventário)
+  app.patch("/api/insumos/:id/estoque", requireAuth, requireActiveLicense, async (req: AuthedRequest, res) => {
+    try {
+      const id = Number(req.params.id);
+      const result = await ajustarEstoqueInsumo(req.usuario!.empresaId, id, req.body ?? {});
+      if (result && "erro" in result) {
+        res.status(400).json({ erro: result.erro });
+        return;
+      }
+      res.json({ insumo: result });
+    } catch (e: any) {
+      res.status(500).json({ erro: e?.message || "Erro ao movimentar estoque do insumo" });
     }
   });
 

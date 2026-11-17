@@ -99,6 +99,13 @@ export function AdminPage() {
     e.preventDefault();
     setErroForm("");
 
+    const emailLimpo = formEmail.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const telefoneDigitos = formTelefone
+      .replace(/\D/g, "")
+      .replace(/^55(\d{10,11})$/, "$1")
+      .replace(/^0(\d{10,11})$/, "$1");
+
     if (!formNome.trim()) {
       setErroForm("Informe o nome da empresa.");
       return;
@@ -107,12 +114,12 @@ export function AdminPage() {
       setErroForm("Informe o nome completo do responsável/usuário.");
       return;
     }
-    if (!formEmail.trim() || !formEmail.includes("@")) {
+    if (!emailLimpo || !emailRegex.test(emailLimpo)) {
       setErroForm("Informe um e-mail válido para ser usado como login.");
       return;
     }
-    if (!formTelefone.trim()) {
-      setErroForm("Informe o telefone/WhatsApp do usuário.");
+    if (!telefoneDigitos || telefoneDigitos.length < 10 || telefoneDigitos.length > 11) {
+      setErroForm("Informe um número de celular/WhatsApp válido com DDD (10 ou 11 dígitos).");
       return;
     }
 
@@ -121,8 +128,8 @@ export function AdminPage() {
       await criarEmpresaAdminApi({
         nome: formNome.trim(),
         nomeCompletoUsuario: formNomeUsuario.trim(),
-        email: formEmail.trim().toLowerCase(),
-        telefone: formTelefone.trim(),
+        email: emailLimpo,
+        telefone: telefoneDigitos,
         plano: formPlano,
         diasValidade: formDias,
         senhaAdmin: formSenha,

@@ -559,9 +559,10 @@ export async function registrarConfeitariaApi(dados: {
 
 export type Insumo = {
   id: number;
+  codigo?: string;
   nome: string;
   categoria: "ingrediente" | "embalagem" | "decoracao" | "outro";
-  unidadeMedida: "g" | "ml" | "un";
+  unidadeMedida: "g" | "ml" | "un" | "kg" | "l";
   unidadeCompra: "kg" | "g" | "l" | "ml" | "un";
   quantidadeEmbalagem: number;
   precoCompra: number;
@@ -570,14 +571,27 @@ export type Insumo = {
   estoqueMinimo: number;
   marca: string | null;
   fornecedorId?: number | null;
+  fornecedorNome?: string | null;
+  localArmazenamento?: string | null;
+  observacoes?: string | null;
+  status?: "ativo" | "inativo";
   criadoEm: string;
+  atualizadoEm?: string | null;
+  produtosVinculados?: {
+    id: number;
+    codigo: string;
+    nome: string;
+    quantidade: number;
+    unidade: string;
+  }[];
 };
 
 export type InsumoInput = {
   id?: number;
+  codigo?: string;
   nome: string;
   categoria?: "ingrediente" | "embalagem" | "decoracao" | "outro";
-  unidadeMedida?: "g" | "ml" | "un";
+  unidadeMedida?: "g" | "ml" | "un" | "kg" | "l";
   unidadeCompra?: "kg" | "g" | "l" | "ml" | "un";
   quantidadeEmbalagem: number;
   precoCompra: number;
@@ -585,6 +599,9 @@ export type InsumoInput = {
   estoqueMinimo?: number;
   marca?: string;
   fornecedorId?: number | null;
+  localArmazenamento?: string;
+  observacoes?: string;
+  status?: "ativo" | "inativo";
 };
 
 export type ReceitaItemDetalhado = {
@@ -665,6 +682,13 @@ export async function fetchInsumos(): Promise<Insumo[]> {
   return data.insumos;
 }
 
+export async function fetchProximoCodigoInsumo(): Promise<string> {
+  const response = await fetch("/api/insumos/proximo-codigo", { credentials: "include" });
+  if (!response.ok) return "INS-001";
+  const data = await readJson<{ codigo: string }>(response);
+  return data.codigo || "INS-001";
+}
+
 export async function saveInsumo(dados: InsumoInput): Promise<Insumo> {
   const response = await fetch("/api/insumos", {
     method: "POST",
@@ -675,6 +699,29 @@ export async function saveInsumo(dados: InsumoInput): Promise<Insumo> {
   const data = await readJson<{ insumo?: Insumo; erro?: string }>(response);
   if (!response.ok || !data.insumo) {
     throw new Error(data.erro || "Falha ao salvar insumo");
+  }
+  return data.insumo;
+}
+
+export async function ajustarEstoqueInsumoApi(
+  id: number,
+  dados: {
+    tipo: "entrada" | "saida" | "ajuste";
+    quantidade: number;
+    modoUnidade?: "base" | "embalagem";
+    novoPrecoCompra?: number;
+    motivo?: string;
+  },
+): Promise<Insumo> {
+  const response = await fetch(`/api/insumos/${id}/estoque`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  const data = await readJson<{ insumo?: Insumo; erro?: string }>(response);
+  if (!response.ok || !data.insumo) {
+    throw new Error(data.erro || "Falha ao ajustar estoque do insumo");
   }
   return data.insumo;
 }

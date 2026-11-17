@@ -270,7 +270,52 @@ export type UnidadeMedida = {
   totalProdutos?: number;
 };
 
+const UNIDADES_PADRAO_SISTEMA = [
+  { sigla: "UN", nome: "Unidade", permiteDecimal: false, padrao: true },
+  { sigla: "KG", nome: "Quilo / Quilograma", permiteDecimal: true, padrao: false },
+  { sigla: "G", nome: "Grama", permiteDecimal: true, padrao: false },
+  { sigla: "CENTO", nome: "Cento (100 unidades)", permiteDecimal: false, padrao: false },
+  { sigla: "CX", nome: "Caixa / Kit", permiteDecimal: false, padrao: false },
+  { sigla: "FATIA", nome: "Fatia / Pedaço", permiteDecimal: false, padrao: false },
+  { sigla: "L", nome: "Litro", permiteDecimal: true, padrao: false },
+  { sigla: "ML", nome: "Mililitro", permiteDecimal: true, padrao: false },
+  { sigla: "PCT", nome: "Pacote", permiteDecimal: false, padrao: false },
+];
+
+export async function garantirUnidadesMedidaPadrao(empresaId: number) {
+  const temUn = await db.execute({
+    sql: "SELECT id FROM tb_unidade_medida WHERE empresa_id = ? AND UPPER(sigla) = 'UN' LIMIT 1",
+    args: [empresaId],
+  });
+  if (temUn.rows.length > 0) return;
+
+  const jaTemPadrao = await db.execute({
+    sql: "SELECT id FROM tb_unidade_medida WHERE empresa_id = ? AND padrao = 1 LIMIT 1",
+    args: [empresaId],
+  });
+  let temPadrao = jaTemPadrao.rows.length > 0;
+
+  for (const u of UNIDADES_PADRAO_SISTEMA) {
+    const existing = await db.execute({
+      sql: "SELECT id FROM tb_unidade_medida WHERE empresa_id = ? AND (UPPER(sigla) = UPPER(?) OR LOWER(nome) = LOWER(?))",
+      args: [empresaId, u.sigla, u.nome],
+    });
+
+    if (!existing.rows[0]) {
+      const definirPadrao = u.padrao && !temPadrao;
+      if (definirPadrao) temPadrao = true;
+      await db.execute({
+        sql: `INSERT INTO tb_unidade_medida (empresa_id, sigla, nome, permite_decimal, padrao, criado_em)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [empresaId, u.sigla, u.nome, u.permiteDecimal ? 1 : 0, definirPadrao ? 1 : 0, NOW()],
+      });
+    }
+  }
+}
+
 export async function listarUnidadesMedida(empresaId: number): Promise<UnidadeMedida[]> {
+  await garantirUnidadesMedidaPadrao(empresaId);
+
   const result = await db.execute({
     sql: `SELECT u.id, u.sigla, u.nome, u.permite_decimal, u.padrao,
                  (SELECT COUNT(*) FROM tb_produto p WHERE p.empresa_id = u.empresa_id AND (LOWER(p.unidade_venda) = LOWER(u.sigla) OR LOWER(p.unidade_venda) = LOWER(u.nome))) AS total_produtos

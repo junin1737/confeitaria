@@ -47,6 +47,13 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
     e.preventDefault();
     setErro("");
 
+    const emailLimpo = login.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const telefoneDigitos = telefone
+      .replace(/\D/g, "")
+      .replace(/^55(\d{10,11})$/, "$1")
+      .replace(/^0(\d{10,11})$/, "$1");
+
     if (!nomeCompleto.trim()) {
       setErro("Informe o seu nome completo.");
       return;
@@ -55,12 +62,12 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
       setErro("Informe o nome do seu ateliê ou confeitaria.");
       return;
     }
-    if (!login.trim() || !login.includes("@")) {
+    if (!emailLimpo || !emailRegex.test(emailLimpo)) {
       setErro("Informe um e-mail válido para o login.");
       return;
     }
-    if (!telefone.trim()) {
-      setErro("Informe o seu telefone/WhatsApp de contato.");
+    if (!telefoneDigitos || telefoneDigitos.length < 10 || telefoneDigitos.length > 11) {
+      setErro("Informe um número de celular/WhatsApp válido com DDD (10 ou 11 dígitos).");
       return;
     }
     if (senha.length < 4) {
@@ -73,8 +80,8 @@ export function LoginPage({ onLoggedIn }: { onLoggedIn: (usuario: UsuarioSessao)
       const session = await registrarConfeitariaApi({
         nomeCompleto: nomeCompleto.trim(),
         nomeAtelie: nomeAtelie.trim(),
-        email: login.trim().toLowerCase(),
-        telefone: telefone.trim(),
+        email: emailLimpo,
+        telefone: telefoneDigitos,
         senha,
       });
       if (session) {

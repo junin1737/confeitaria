@@ -62,6 +62,18 @@ import {
   type UnidadeMedida,
 } from "../api";
 
+const UNIDADES_PADRAO_FALLBACK: UnidadeMedida[] = [
+  { id: -1, sigla: "UN", nome: "Unidade", permiteDecimal: false, padrao: true },
+  { id: -2, sigla: "KG", nome: "Quilo / Quilograma", permiteDecimal: true, padrao: false },
+  { id: -3, sigla: "G", nome: "Grama", permiteDecimal: true, padrao: false },
+  { id: -4, sigla: "CENTO", nome: "Cento (100 unidades)", permiteDecimal: false, padrao: false },
+  { id: -5, sigla: "CX", nome: "Caixa / Kit", permiteDecimal: false, padrao: false },
+  { id: -6, sigla: "FATIA", nome: "Fatia / Pedaço", permiteDecimal: false, padrao: false },
+  { id: -7, sigla: "L", nome: "Litro", permiteDecimal: true, padrao: false },
+  { id: -8, sigla: "ML", nome: "Mililitro", permiteDecimal: true, padrao: false },
+  { id: -9, sigla: "PCT", nome: "Pacote", permiteDecimal: false, padrao: false },
+];
+
 export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) {
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [grupos, setGrupos] = useState<GrupoProduto[]>([]);
@@ -88,7 +100,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
   const [formTipoItemId, setFormTipoItemId] = useState<number | null>(null);
   const [formGrupoId, setFormGrupoId] = useState<number | null>(null);
   const [formSubgrupoId, setFormSubgrupoId] = useState<number | null>(null);
-  const [formUnidadeVenda, setFormUnidadeVenda] = useState("unidade");
+  const [formUnidadeVenda, setFormUnidadeVenda] = useState("UN");
   const [formPrecoCusto, setFormPrecoCusto] = useState<number>(0);
   const [formPrecoVenda, setFormPrecoVenda] = useState<number>(0);
   const [formEstoqueAtual, setFormEstoqueAtual] = useState<number>(0);
@@ -98,7 +110,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
   // Ficha Técnica / Receita integrada
   const [formTemReceita, setFormTemReceita] = useState(true);
   const [formRendimentoQtd, setFormRendimentoQtd] = useState(1);
-  const [formRendimentoUnidade, setFormRendimentoUnidade] = useState("unidade");
+  const [formRendimentoUnidade, setFormRendimentoUnidade] = useState("UN");
   const [formTempoPreparoMinutos, setFormTempoPreparoMinutos] = useState(60);
   const [formCustoHoraTrabalho, setFormCustoHoraTrabalho] = useState(20);
   const [formPercentualCustosFixos, setFormPercentualCustosFixos] = useState(15);
@@ -187,7 +199,28 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     }
   };
 
+  const unidadesDisponiveis: UnidadeMedida[] = [
+    ...unidadesMedida,
+    ...UNIDADES_PADRAO_FALLBACK.filter(
+      (pad) =>
+        !unidadesMedida.some(
+          (u) =>
+            u.sigla.toUpperCase() === pad.sigla.toUpperCase() ||
+            u.nome.toLowerCase() === pad.nome.toLowerCase()
+        )
+    ),
+  ];
+
   const selecionarProduto = (p: Produto) => {
+    const unidVenda =
+      !p.unidadeVenda || p.unidadeVenda.toLowerCase() === "unidade"
+        ? "UN"
+        : p.unidadeVenda.toUpperCase();
+    const unidRend =
+      !p.rendimentoUnidade || p.rendimentoUnidade.toLowerCase() === "unidade"
+        ? unidVenda
+        : p.rendimentoUnidade;
+
     setSelectedId(p.id);
     setEditMode(false);
     setFormCodigo(p.codigo);
@@ -196,7 +229,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     setFormTipoItemId(p.tipoItemId ?? tiposItem.find((t) => t.padrao)?.id ?? null);
     setFormGrupoId(p.grupoId);
     setFormSubgrupoId(p.subgrupoId);
-    setFormUnidadeVenda(p.unidadeVenda || "unidade");
+    setFormUnidadeVenda(unidVenda);
     setFormPrecoCusto(p.precoCusto || 0);
     setFormPrecoVenda(p.precoVenda || 0);
     setFormEstoqueAtual(p.estoqueAtual || 0);
@@ -206,7 +239,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     // Receita integrada
     setFormTemReceita(p.temReceita);
     setFormRendimentoQtd(p.rendimentoQuantidade || 1);
-    setFormRendimentoUnidade(p.rendimentoUnidade || p.unidadeVenda || "unidade");
+    setFormRendimentoUnidade(unidRend);
     setFormTempoPreparoMinutos(p.tempoPreparoMinutos || 60);
     setFormCustoHoraTrabalho(p.custoHoraTrabalho ?? 20);
     setFormPercentualCustosFixos(p.percentualCustosFixos ?? 15);
@@ -240,6 +273,12 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     } catch {
       setFormCodigo(proximoCod);
     }
+    const unidPadrao =
+      unidadesDisponiveis.find((u) => u.padrao)?.sigla ||
+      unidadesDisponiveis.find((u) => u.sigla === "UN")?.sigla ||
+      unidadesDisponiveis[0]?.sigla ||
+      "UN";
+
     setSelectedId("new");
     setEditMode(true);
     setFormNome("");
@@ -247,7 +286,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     setFormTipoItemId(tiposItem.find((t) => t.padrao)?.id || tiposItem[0]?.id || null);
     setFormGrupoId(grupos[0]?.id || null);
     setFormSubgrupoId(null);
-    setFormUnidadeVenda("unidade");
+    setFormUnidadeVenda(unidPadrao);
     setFormPrecoCusto(0);
     setFormPrecoVenda(0);
     setFormEstoqueAtual(0);
@@ -257,7 +296,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     // Receita
     setFormTemReceita(true);
     setFormRendimentoQtd(1);
-    setFormRendimentoUnidade("unidade");
+    setFormRendimentoUnidade(unidPadrao);
     setFormTempoPreparoMinutos(0);
     setFormCustoHoraTrabalho(0);
     setFormPercentualCustosFixos(0);
@@ -935,22 +974,17 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                                 style={{ flex: 1 }}
                                 required
                               >
-                                {unidadesMedida.length > 0 ? (
-                                  unidadesMedida.map((u) => (
-                                    <option key={u.id} value={u.sigla}>
-                                      {u.sigla} - {u.nome}
-                                    </option>
-                                  ))
-                                ) : (
-                                  <>
-                                    <option value="UN">UN - Unidade</option>
-                                    <option value="KG">KG - Quilo</option>
-                                    <option value="G">G - Grama</option>
-                                    <option value="CENTO">CENTO - Cento</option>
-                                    <option value="CX">CX - Caixa</option>
-                                    <option value="FATIA">FATIA - Fatia</option>
-                                  </>
-                                )}
+                                {unidadesDisponiveis.map((u) => (
+                                  <option key={u.id ?? u.sigla} value={u.sigla}>
+                                    {u.sigla} - {u.nome}
+                                  </option>
+                                ))}
+                                {formUnidadeVenda &&
+                                  !unidadesDisponiveis.some(
+                                    (u) => u.sigla.toUpperCase() === formUnidadeVenda.toUpperCase()
+                                  ) && (
+                                    <option value={formUnidadeVenda}>{formUnidadeVenda}</option>
+                                  )}
                               </select>
                               <button
                                 type="button"
@@ -1824,8 +1858,11 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                         setNovaUnidadeNome("");
                         setNovaUnidadeDecimal(false);
                         setNovaUnidadePadrao(false);
-                        setFormUnidadeVenda(saved.sigla);
-                        await carregarDados();
+                        const unids = await fetchUnidadesMedida();
+                        setUnidadesMedida(unids);
+                        if (editMode || selectedId === "new") {
+                          setFormUnidadeVenda(saved.sigla);
+                        }
                         onAction(`Unidade "${saved.sigla}" salva com sucesso!`);
                       } catch (err: any) {
                         alert(err.message);
@@ -1839,14 +1876,14 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
 
               {/* Listagem de Unidades Cadastradas */}
               <div style={{ maxHeight: "250px", overflowY: "auto", border: "1px solid var(--c-border)", borderRadius: "8px", padding: "10px" }}>
-                {unidadesMedida.length === 0 ? (
+                {unidadesDisponiveis.length === 0 ? (
                   <p style={{ textAlign: "center", color: "var(--c-muted)", fontSize: "12px", margin: "16px 0" }}>
                     Nenhuma unidade cadastrada.
                   </p>
                 ) : (
-                  unidadesMedida.map((u) => (
+                  unidadesDisponiveis.map((u) => (
                     <div
-                      key={u.id}
+                      key={u.id ?? u.sigla}
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
@@ -1878,21 +1915,32 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                           </span>
                         )}
                       </div>
-                      <button
-                        onClick={async () => {
-                          if (!confirm(`Excluir a unidade de medida "${u.sigla}"?`)) return;
-                          try {
-                            await deleteUnidadeMedida(u.id);
-                            await carregarDados();
-                            onAction("Unidade de medida excluída.");
-                          } catch (err: any) {
-                            alert(err.message);
-                          }
-                        }}
-                        style={{ color: "var(--c-danger)", fontSize: "11px", border: "none", background: "none", cursor: "pointer" }}
-                      >
-                        Excluir
-                      </button>
+                      {u.id > 0 && (
+                        <button
+                          onClick={async () => {
+                            if (!confirm(`Excluir a unidade de medida "${u.sigla}"?`)) return;
+                            try {
+                              await deleteUnidadeMedida(u.id);
+                              const unids = await fetchUnidadesMedida();
+                              setUnidadesMedida(unids);
+                              if (formUnidadeVenda === u.sigla) {
+                                const unidPadrao =
+                                  unids.find((item) => item.padrao)?.sigla ||
+                                  unids.find((item) => item.sigla === "UN")?.sigla ||
+                                  unids[0]?.sigla ||
+                                  "UN";
+                                setFormUnidadeVenda(unidPadrao);
+                              }
+                              onAction("Unidade de medida excluída.");
+                            } catch (err: any) {
+                              alert(err.message);
+                            }
+                          }}
+                          style={{ color: "var(--c-danger)", fontSize: "11px", border: "none", background: "none", cursor: "pointer" }}
+                        >
+                          Excluir
+                        </button>
+                      )}
                     </div>
                   ))
                 )}
