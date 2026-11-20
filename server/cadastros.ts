@@ -19,7 +19,7 @@
  */
 
 import { db } from "./db/client";
-import { calcularTotaisReceita } from "./precificacao";
+import { calcularTotaisReceita, sincronizarProdutoInsumoUnico } from "./precificacao";
 
 const NOW = () => new Date().toISOString();
 
@@ -1045,8 +1045,17 @@ export async function salvarProduto(
   const agora = NOW();
 
   let produtoId = dados.id;
+  let nomeAnterior: string | null = null;
 
   if (produtoId) {
+    const prevRes = await db.execute({
+      sql: "SELECT nome FROM tb_produto WHERE empresa_id = ? AND id = ? LIMIT 1",
+      args: [empresaId, produtoId],
+    });
+    if (prevRes.rows[0]?.nome) {
+      nomeAnterior = String(prevRes.rows[0].nome);
+    }
+
     await db.execute({
       sql: `UPDATE tb_produto SET
               codigo = ?, nome = ?, descricao = ?, tipo_item_id = ?, grupo_id = ?, subgrupo_id = ?,
@@ -1141,6 +1150,20 @@ export async function salvarProduto(
       }
     }
   }
+
+  // Sincroniza automaticamente para tb_insumo caso o item seja matéria-prima / insumo / embalagem
+  await sincronizarProdutoInsumoUnico(empresaId, {
+    nome,
+    nomeAnterior,
+    descricao: dados.descricao,
+    tipoItemId: dados.tipoItemId,
+    grupoId: dados.grupoId,
+    unidadeVenda: dados.unidadeVenda || "unidade",
+    precoCusto,
+    precoVenda,
+    estoqueAtual: dados.estoqueAtual ?? 0,
+    estoqueMinimo: dados.estoqueMinimo ?? 0,
+  });
 
   // Recarrega o produto com as métricas recalculadas
   const produtoAtualizado = await obterProduto(empresaId, produtoId);

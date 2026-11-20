@@ -138,10 +138,296 @@ export function normalizarUnidadeECusto(
 }
 
 /**
+ * [FUNÇÃO AUXILIAR: normalizarTexto]
+ * Remove acentos e converte para minúsculas para comparações consistentes.
+ */
+function normalizarTexto(texto?: string | null): string {
+  return String(texto ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+/**
+ * [FUNÇÃO AUXILIAR: ehTipoOuGrupoInsumo]
+ * Identifica se um registro de tb_produto representa um insumo / matéria-prima / embalagem
+ * que deve ficar disponível nas fichas técnicas e no módulo Estoque e Insumos.
+ */
+export function ehTipoOuGrupoInsumo(
+  tipoCodigo?: string | null,
+  tipoNome?: string | null,
+  grupoNome?: string | null,
+): boolean {
+  const cod = String(tipoCodigo ?? "").trim();
+  const tNome = normalizarTexto(tipoNome);
+  const gNome = normalizarTexto(grupoNome);
+
+  // Produto Acabado nunca é tratado automaticamente como insumo
+  if (cod === "4" || tNome.includes("acabado")) return false;
+
+  if (["1", "2", "6", "10"].includes(cod)) return true;
+
+  if (
+    tNome.includes("materia-prima") ||
+    tNome.includes("materia prima") ||
+    tNome.includes("insumo") ||
+    tNome.includes("embalagem") ||
+    tNome.includes("intermediario") ||
+    tNome.includes("decoracao")
+  ) {
+    return true;
+  }
+
+  if (
+    gNome.includes("insumo") ||
+    gNome.includes("materia-prima") ||
+    gNome.includes("materia prima") ||
+    gNome.includes("embalagem")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function mapearCategoriaInsumo(
+  tipoCodigo?: string | null,
+  tipoNome?: string | null,
+  grupoNome?: string | null,
+): Insumo["categoria"] {
+  const cod = String(tipoCodigo ?? "").trim();
+  const combinado = `${normalizarTexto(tipoNome)} ${normalizarTexto(grupoNome)}`;
+  if (cod === "2" || combinado.includes("embalagem")) return "embalagem";
+  if (combinado.includes("decoracao")) return "decoracao";
+  return "ingrediente";
+}
+
+function mapearUnidadeProdutoParaInsumo(unidadeVenda?: string | null): {
+  unidadeCompra: Insumo["unidadeCompra"];
+  unidadeMedida: Insumo["unidadeMedida"];
+  quantidadeEmbalagem: number;
+  fatorEstoque: number;
+} {
+  const u = String(unidadeVenda ?? "").trim().toUpperCase();
+  if (u === "KG") {
+    return { unidadeCompra: "kg", unidadeMedida: "g", quantidadeEmbalagem: 1, fatorEstoque: 1000 };
+  }
+  if (u === "G") {
+    return { unidadeCompra: "g", unidadeMedida: "g", quantidadeEmbalagem: 1, fatorEstoque: 1 };
+  }
+  if (u === "L") {
+    return { unidadeCompra: "l", unidadeMedida: "ml", quantidadeEmbalagem: 1, fatorEstoque: 1000 };
+  }
+  if (u === "ML") {
+    return { unidadeCompra: "ml", unidadeMedida: "ml", quantidadeEmbalagem: 1, fatorEstoque: 1 };
+  }
+  return { unidadeCompra: "un", unidadeMedida: "un", quantidadeEmbalagem: 1, fatorEstoque: 1 };
+}
+
+/**
+ * [SYNC: sincronizarProdutoInsumoUnico]
+ * Garante que um produto classificado como insumo/matéria-prima/embalagem exista em tb_insumo
+ * para uso imediato em Fichas Técnicas e Estoque e Insumos.
+ */
+export async function sincronizarProdutoInsumoUnico(
+  empresaId: number,
+  produto: {
+    nome: string;
+    nomeAnterior?: string | null;
+    descricao?: string | null;
+    tipoItemId?: number | null;
+    grupoId?: number | null;
+    unidadeVenda?: string | null;
+    precoCusto?: number;
+    precoVenda?: number;
+    estoqueAtual?: number;
+    estoqueMinimo?: number;
+  },
+) {
+  let tipoCodigo: string | null = null;
+  let tipoNome: string | null = null;
+  let grupoNome: string | null = null;
+
+  if (produto.tipoItemId) {
+    const tRes = await db.execute({
+      sql: "SELECT codigo, nome FROM tb_tipo_item WHERE id = ? AND empresa_id = ? LIMIT 1",
+      args: [produto.tipoItemId, empresaId],
+    });
+    if (tRes.rows[0]) {
+      tipoCodigo = tRes.rows[0].codigo ? String(tRes.rows[0].codigo) : null;
+      tipoNome = tRes.rows[0].nome ? String(tRes.rows[0].nome) : null;
+    }
+  }
+
+  if (produto.grupoId) {
+    const gRes = await db.execute({
+      sql: "SELECT nome FROM tb_grupo_produto WHERE id = ? AND empresa_id = ? LIMIT 1",
+      args: [produto.grupoId, empresaId],
+    });
+    if (gRes.rows[0]) {
+      grupoNome = gRes.rows[0].nome ? String(gRes.rows[0].nome) : null;
+    }
+  }
+
+  if (!ehTipoOuGrupoInsumo(tipoCodigo, tipoNome, grupoNome)) return;
+
+  const nome = produto.nome.trim();
+  if (!nome) return;
+
+  const precoBase = Math.max(0, Number(produto.precoCusto) || Number(produto.precoVenda) || 0);
+  const categoria = mapearCategoriaInsumo(tipoCodigo, tipoNome, grupoNome);
+  const { unidadeCompra, unidadeMedida, quantidadeEmbalagem, fatorEstoque } =
+    mapearUnidadeProdutoParaInsumo(produto.unidadeVenda);
+
+  const buscaNome = (produto.nomeAnterior?.trim() || nome).toLowerCase();
+  const existente = await db.execute({
+    sql: `SELECT id, unidade_compra, unidade_medida, quantidade_embalagem, preco_compra
+          FROM tb_insumo
+          WHERE empresa_id = ? AND (LOWER(TRIM(nome)) = ? OR LOWER(TRIM(nome)) = ?)
+          LIMIT 1`,
+    args: [empresaId, nome.toLowerCase(), buscaNome],
+  });
+
+  const agora = new Date().toISOString();
+
+  if (existente.rows[0]) {
+    const insId = Number(existente.rows[0].id);
+    const uCompraAtual = String(existente.rows[0].unidade_compra || unidadeCompra);
+    const uMedidaAtual = String(existente.rows[0].unidade_medida || unidadeMedida);
+    const qtdEmbAtual = Math.max(0.0001, Number(existente.rows[0].quantidade_embalagem || 1));
+    const precoAtual = precoBase > 0 ? precoBase : Number(existente.rows[0].preco_compra || 0);
+    const { custoUnitario } = normalizarUnidadeECusto(uCompraAtual, uMedidaAtual, qtdEmbAtual, precoAtual);
+
+    await db.execute({
+      sql: `UPDATE tb_insumo
+            SET nome = ?, categoria = ?, preco_compra = ?, custo_unitario = ?, atualizado_em = ?
+            WHERE empresa_id = ? AND id = ?`,
+      args: [nome, categoria, precoAtual, custoUnitario, agora, empresaId, insId],
+    });
+    await recalcularReceitasPorInsumo(empresaId, insId);
+    return;
+  }
+
+  const codigo = await proximoCodigoInsumo(empresaId);
+  const { custoUnitario } = normalizarUnidadeECusto(
+    unidadeCompra,
+    unidadeMedida,
+    quantidadeEmbalagem,
+    precoBase,
+  );
+
+  await db.execute({
+    sql: `INSERT INTO tb_insumo (
+            empresa_id, codigo, nome, categoria, unidade_medida, unidade_compra,
+            quantidade_embalagem, preco_compra, custo_unitario, estoque_atual,
+            estoque_minimo, observacoes, status, criado_em, atualizado_em
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativo', ?, ?)`,
+    args: [
+      empresaId,
+      codigo,
+      nome,
+      categoria,
+      unidadeMedida,
+      unidadeCompra,
+      quantidadeEmbalagem,
+      precoBase,
+      custoUnitario,
+      Math.max(0, Number(produto.estoqueAtual ?? 0)) * fatorEstoque,
+      Math.max(0, Number(produto.estoqueMinimo ?? 0)) * fatorEstoque,
+      produto.descricao?.trim() || "Sincronizado automaticamente do cadastro de Produtos",
+      agora,
+      agora,
+    ],
+  });
+}
+
+/**
+ * [SYNC: sincronizarProdutosInsumo]
+ * Sincroniza automaticamente quaisquer produtos cadastrados como Insumo / Matéria-Prima / Embalagem
+ * em tb_produto que ainda não existam em tb_insumo.
+ */
+export async function sincronizarProdutosInsumo(empresaId: number) {
+  const prodRes = await db.execute({
+    sql: `SELECT p.id, p.nome, p.descricao, p.unidade_venda, p.preco_custo, p.preco_venda,
+                 p.estoque_atual, p.estoque_minimo,
+                 t.codigo AS tipo_codigo, t.nome AS tipo_nome,
+                 g.nome AS grupo_nome
+          FROM tb_produto p
+          LEFT JOIN tb_tipo_item t ON t.id = p.tipo_item_id
+          LEFT JOIN tb_grupo_produto g ON g.id = p.grupo_id
+          WHERE p.empresa_id = ?`,
+    args: [empresaId],
+  });
+
+  if (prodRes.rows.length === 0) return;
+
+  const insRes = await db.execute({
+    sql: "SELECT LOWER(TRIM(nome)) AS nome_norm FROM tb_insumo WHERE empresa_id = ?",
+    args: [empresaId],
+  });
+  const existentes = new Set(insRes.rows.map((r) => String(r.nome_norm ?? "")));
+
+  const agora = new Date().toISOString();
+
+  for (const row of prodRes.rows) {
+    const tipoCodigo = row.tipo_codigo ? String(row.tipo_codigo) : null;
+    const tipoNome = row.tipo_nome ? String(row.tipo_nome) : null;
+    const grupoNome = row.grupo_nome ? String(row.grupo_nome) : null;
+
+    if (!ehTipoOuGrupoInsumo(tipoCodigo, tipoNome, grupoNome)) continue;
+
+    const nome = String(row.nome ?? "").trim();
+    if (!nome) continue;
+    const chave = nome.toLowerCase();
+    if (existentes.has(chave)) continue;
+
+    const categoria = mapearCategoriaInsumo(tipoCodigo, tipoNome, grupoNome);
+    const { unidadeCompra, unidadeMedida, quantidadeEmbalagem, fatorEstoque } =
+      mapearUnidadeProdutoParaInsumo(row.unidade_venda ? String(row.unidade_venda) : null);
+    const precoBase = Math.max(0, Number(row.preco_custo ?? 0) || Number(row.preco_venda ?? 0));
+    const { custoUnitario } = normalizarUnidadeECusto(
+      unidadeCompra,
+      unidadeMedida,
+      quantidadeEmbalagem,
+      precoBase,
+    );
+    const codigo = await proximoCodigoInsumo(empresaId);
+
+    await db.execute({
+      sql: `INSERT INTO tb_insumo (
+              empresa_id, codigo, nome, categoria, unidade_medida, unidade_compra,
+              quantidade_embalagem, preco_compra, custo_unitario, estoque_atual,
+              estoque_minimo, observacoes, status, criado_em, atualizado_em
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativo', ?, ?)`,
+      args: [
+        empresaId,
+        codigo,
+        nome,
+        categoria,
+        unidadeMedida,
+        unidadeCompra,
+        quantidadeEmbalagem,
+        precoBase,
+        custoUnitario,
+        Math.max(0, Number(row.estoque_atual ?? 0)) * fatorEstoque,
+        Math.max(0, Number(row.estoque_minimo ?? 0)) * fatorEstoque,
+        row.descricao ? String(row.descricao) : "Sincronizado automaticamente do cadastro de Produtos",
+        agora,
+        agora,
+      ],
+    });
+    existentes.add(chave);
+  }
+}
+
+/**
  * [INSUMOS: listarInsumos]
  * Retorna todos os insumos cadastrados para a empresa, com fornecedor e produtos vinculados.
  */
 export async function listarInsumos(empresaId: number): Promise<Insumo[]> {
+  await sincronizarProdutosInsumo(empresaId);
+
   const result = await db.execute({
     sql: `SELECT i.id, i.codigo, i.nome, i.categoria, i.unidade_medida, i.unidade_compra,
                  i.quantidade_embalagem, i.preco_compra, i.custo_unitario, i.estoque_atual,

@@ -132,6 +132,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
 
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [receitaAviso, setReceitaAviso] = useState("");
 
   // Modais de Gestão (Grupos e Tipos de Item)
   const [modalGruposAberto, setModalGruposAberto] = useState(false);
@@ -223,6 +224,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
 
     setSelectedId(p.id);
     setEditMode(false);
+    setReceitaAviso("");
     setFormCodigo(p.codigo);
     setFormNome(p.nome);
     setFormDescricao(p.descricao || "");
@@ -306,6 +308,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
     setHistoricoCusto([]);
     setFormTab("dados");
     setFormError("");
+    setReceitaAviso("");
   };
 
   // Classificação do produto: Ficha Técnica e Receita são exclusivas de Produtos Acabados
@@ -375,9 +378,13 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
   // Itens da receita do formulário
   const adicionarItemReceita = () => {
     if (insumos.length === 0) {
-      alert("Cadastre insumos primeiro na aba Estoque e Insumos!");
+      const msg =
+        "Nenhum insumo disponível para a receita. Cadastre matérias-primas em Estoque e Insumos ou aqui em Produtos (com o tipo Matéria-Prima, Embalagem ou Outros Insumos).";
+      setReceitaAviso(msg);
+      onAction("Cadastre ao menos um insumo antes de adicioná-lo à ficha técnica.");
       return;
     }
+    setReceitaAviso("");
     const primeiro = insumos[0];
     setFormItensReceita([
       ...formItensReceita,
@@ -847,8 +854,8 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                           <h3>Dados Básicos</h3>
                         </div>
                       </div>
-                      <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-                        <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: "10px" }}>
+                      <div className="field-stack">
+                        <div className="field-row field-row-code">
                           <div className="field">
                             <label>Código Interno</label>
                             <input
@@ -871,7 +878,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
 
                         <div className="field">
                           <label>Tipo de Item (Classificação) *</label>
-                          <div style={{ display: "flex", gap: "8px" }}>
+                          <div className="field-inline">
                             <select
                               value={formTipoItemId || ""}
                               onChange={(e) => {
@@ -888,7 +895,6 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                                   setFormStatus("inativo");
                                 }
                               }}
-                              style={{ flex: 1 }}
                               required
                             >
                               <option value="">Selecione o tipo de item...</option>
@@ -918,7 +924,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                             placeholder="Descrição atrativa para o cardápio e clientes..."
                           />
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                        <div className="field-row">
                           <div className="field">
                             <label>Grupo / Categoria *</label>
                             <select
@@ -963,76 +969,60 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                           <h3>Valores & Pronta Entrega</h3>
                         </div>
                       </div>
-                      <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                          <div className="field">
-                            <label>Unidade de Medida / Venda *</label>
-                            <div style={{ display: "flex", gap: "8px" }}>
-                              <select
-                                value={formUnidadeVenda}
-                                onChange={(e) => setFormUnidadeVenda(e.target.value)}
-                                style={{ flex: 1 }}
-                                required
-                              >
-                                {unidadesDisponiveis.map((u) => (
-                                  <option key={u.id ?? u.sigla} value={u.sigla}>
-                                    {u.sigla} - {u.nome}
-                                  </option>
-                                ))}
-                                {formUnidadeVenda &&
-                                  !unidadesDisponiveis.some(
-                                    (u) => u.sigla.toUpperCase() === formUnidadeVenda.toUpperCase()
-                                  ) && (
-                                    <option value={formUnidadeVenda}>{formUnidadeVenda}</option>
-                                  )}
-                              </select>
-                              <button
-                                type="button"
-                                className="button secondary"
-                                onClick={() => setModalUnidadesAberto(true)}
-                                title="Cadastrar / Gerenciar Unidades de Medida"
-                                style={{ padding: "0 10px", fontSize: "12px", whiteSpace: "nowrap" }}
-                              >
-                                <Plus size={14} /> Unidades
-                              </button>
-                            </div>
-                          </div>
-                          <div className="field">
-                            <label>Status no Cardápio</label>
+                      <div className="field-stack">
+                        <div className="field">
+                          <label>Unidade de Medida / Venda *</label>
+                          <div className="field-inline">
                             <select
-                              value={isNaoVendavel ? "inativo" : formStatus}
-                              onChange={(e) => setFormStatus(e.target.value as any)}
-                              disabled={!editMode || isNaoVendavel}
+                              value={formUnidadeVenda}
+                              onChange={(e) => setFormUnidadeVenda(e.target.value)}
+                              required
                             >
-                              {!isNaoVendavel && <option value="ativo">Ativo no Cardápio</option>}
-                              <option value="inativo">
-                                {isNaoVendavel ? "Desabilitado no Cardápio (Não destinado à venda)" : "Inativo / Oculto"}
-                              </option>
+                              {unidadesDisponiveis.map((u) => (
+                                <option key={u.id ?? u.sigla} value={u.sigla}>
+                                  {u.sigla} - {u.nome}
+                                </option>
+                              ))}
+                              {formUnidadeVenda &&
+                                !unidadesDisponiveis.some(
+                                  (u) => u.sigla.toUpperCase() === formUnidadeVenda.toUpperCase()
+                                ) && (
+                                  <option value={formUnidadeVenda}>{formUnidadeVenda}</option>
+                                )}
                             </select>
-                            {isNaoVendavel && (
-                              <small style={{ color: "var(--c-muted)", fontSize: "10px", marginTop: "3px", display: "block" }}>
-                                Matéria-prima, embalagem e insumos não aparecem no cardápio de venda.
-                              </small>
-                            )}
+                            <button
+                              type="button"
+                              className="button secondary"
+                              onClick={() => setModalUnidadesAberto(true)}
+                              title="Cadastrar / Gerenciar Unidades de Medida"
+                            >
+                              <Plus size={14} /> Unidades
+                            </button>
                           </div>
                         </div>
 
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+                        <div className="field">
+                          <label>Status no Cardápio</label>
+                          <select
+                            value={isNaoVendavel ? "inativo" : formStatus}
+                            onChange={(e) => setFormStatus(e.target.value as any)}
+                            disabled={!editMode || isNaoVendavel}
+                          >
+                            {!isNaoVendavel && <option value="ativo">Ativo no Cardápio</option>}
+                            <option value="inativo">
+                              {isNaoVendavel ? "Desabilitado no Cardápio (Uso interno / insumo)" : "Inativo / Oculto"}
+                            </option>
+                          </select>
+                          {isNaoVendavel && (
+                            <small className="field-hint">
+                              Matéria-prima, embalagem e insumos não aparecem no cardápio de venda.
+                            </small>
+                          )}
+                        </div>
+
+                        <div className="field-row">
                           <div className="field">
-                            <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span>Preço de Custo (R$)</span>
-                              {formTemReceita && custoPorUnidadeForm > 0 && (
-                                <button
-                                  type="button"
-                                  className="text-button"
-                                  style={{ fontSize: "11px", color: "var(--c-primary)", textDecoration: "underline", padding: 0 }}
-                                  onClick={() => setFormPrecoCusto(Number(custoPorUnidadeForm.toFixed(2)))}
-                                  title="Preencher com o custo calculado da receita"
-                                >
-                                  Usar da receita (R$ {custoPorUnidadeForm.toFixed(2)})
-                                </button>
-                              )}
-                            </label>
+                            <label>Preço de Custo (R$)</label>
                             <input
                               type="number"
                               step="0.01"
@@ -1042,52 +1032,65 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                               placeholder={custoPorUnidadeForm > 0 ? custoPorUnidadeForm.toFixed(2) : "0,00"}
                               style={{ fontSize: "15px", fontWeight: "600" }}
                             />
-                            <small style={{ color: "var(--c-muted)", fontSize: "10px", marginTop: "3px", display: "block" }}>
-                              {formTemReceita && custoPorUnidadeForm > 0
-                                ? `Custo da ficha técnica: R$ ${custoPorUnidadeForm.toFixed(2)} / ${formUnidadeVenda}`
-                                : "Custo de compra ou fabricação unitária"}
-                            </small>
-                          </div>
-
-                          <div className="field">
-                            <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span>Preço de Venda Praticado (R$){isNaoVendavel ? " (Opcional)" : " *"}</span>
-                              {!isNaoVendavel && precoSugeridoPorUnidadeForm > 0 && (
+                            <small className="field-hint">
+                              <span>
+                                {formTemReceita && custoPorUnidadeForm > 0
+                                  ? `Receita: R$ ${custoPorUnidadeForm.toFixed(2)} / ${formUnidadeVenda}`
+                                  : "Custo unitário de compra ou produção"}
+                              </span>
+                              {formTemReceita && custoPorUnidadeForm > 0 && (
                                 <button
                                   type="button"
                                   className="text-button"
                                   style={{ fontSize: "11px", color: "var(--c-primary)", textDecoration: "underline", padding: 0 }}
-                                  onClick={() => setFormPrecoVenda(Number(precoSugeridoPorUnidadeForm.toFixed(2)))}
-                                  title="Usar o preço sugerido com a margem desejada"
+                                  onClick={() => setFormPrecoCusto(Number(custoPorUnidadeForm.toFixed(2)))}
+                                  title="Preencher com o custo calculado da receita"
                                 >
-                                  Usar sugerido (R$ {precoSugeridoPorUnidadeForm.toFixed(2)})
+                                  Aplicar
                                 </button>
                               )}
-                            </label>
+                            </small>
+                          </div>
+
+                          <div className="field">
+                            <label>Preço de Venda (R$){isNaoVendavel ? " (Opcional)" : " *"}</label>
                             <input
                               type="number"
                               step="0.01"
                               min="0"
                               value={formPrecoVenda || ""}
                               onChange={(e) => setFormPrecoVenda(Number(e.target.value))}
-                              placeholder={isNaoVendavel ? "Opcional (não destinado à venda)" : "Valor cobrado do cliente"}
+                              placeholder={isNaoVendavel ? "Opcional (uso interno)" : "Valor cobrado do cliente"}
                               style={{ fontSize: "15px", fontWeight: "bold", color: "var(--c-primary)" }}
                               required={!isNaoVendavel}
                             />
-                            <small style={{ color: "var(--c-muted)", fontSize: "10px", marginTop: "3px", display: "block" }}>
+                            <small className="field-hint">
                               {isNaoVendavel ? (
-                                "Não obrigatório para matéria-prima, embalagem ou insumos."
+                                <span>Não obrigatório para insumos e embalagens.</span>
                               ) : (
                                 <>
-                                  Sugerido: <b>R$ {precoSugeridoPorUnidadeForm.toFixed(2)}</b>
-                                  {formMargemLucroDesejada > 0 ? ` (${formMargemLucroDesejada}% margem)` : ""}
+                                  <span>
+                                    Sugerido: <b>R$ {precoSugeridoPorUnidadeForm.toFixed(2)}</b>
+                                    {formMargemLucroDesejada > 0 ? ` (${formMargemLucroDesejada}%)` : ""}
+                                  </span>
+                                  {precoSugeridoPorUnidadeForm > 0 && (
+                                    <button
+                                      type="button"
+                                      className="text-button"
+                                      style={{ fontSize: "11px", color: "var(--c-primary)", textDecoration: "underline", padding: 0 }}
+                                      onClick={() => setFormPrecoVenda(Number(precoSugeridoPorUnidadeForm.toFixed(2)))}
+                                      title="Usar o preço sugerido com a margem desejada"
+                                    >
+                                      Aplicar
+                                    </button>
+                                  )}
                                 </>
                               )}
                             </small>
                           </div>
                         </div>
 
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                        <div className="field-row">
                           <div className="field">
                             <label>Estoque Atual ({formUnidadeVenda})</label>
                             <input
@@ -1134,9 +1137,25 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                         </button>
                       </div>
 
+                      {receitaAviso && (
+                        <div className="inline-warning-banner" role="alert">
+                          <span>{receitaAviso}</span>
+                          <button
+                            type="button"
+                            onClick={() => setReceitaAviso("")}
+                            aria-label="Fechar aviso"
+                            style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", padding: "2px", flexShrink: 0 }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+
                       {formItensReceita.length === 0 ? (
                         <div className="employee-empty" style={{ padding: "30px" }}>
-                          Nenhum insumo adicionado a esta receita. Clique em "Adicionar Insumo" acima.
+                          {insumos.length === 0
+                            ? 'Nenhum insumo cadastrado ainda. Cadastre matérias-primas em "Estoque e Insumos" ou como tipo "Matéria-Prima / Embalagem" em "Produtos" para montar esta receita.'
+                            : 'Nenhum insumo adicionado a esta receita. Clique em "Adicionar Insumo" acima.'}
                         </div>
                       ) : (
                         <div style={{ marginTop: "12px", border: "1px solid var(--c-border)", borderRadius: "8px", overflow: "hidden" }}>
@@ -1212,8 +1231,8 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                             <h3>Parâmetros de Produção</h3>
                           </div>
                         </div>
-                        <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                        <div className="field-stack">
+                          <div className="field-row">
                             <div className="field">
                               <label>Rendimento da Receita</label>
                               <input
@@ -1233,7 +1252,7 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                             </div>
                           </div>
 
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                          <div className="field-row">
                             <div className="field">
                               <label>Tempo de Preparo (min)</label>
                               <input
@@ -1244,17 +1263,18 @@ export function ProductsPage({ onAction }: { onAction: (msg: string) => void }) 
                               />
                             </div>
                             <div className="field">
-                              <label>Sua Hora de Trabalho (R$/h)</label>
+                              <label>Valor da Hora (R$/h)</label>
                               <input
                                 type="number"
                                 step="0.50"
+                                min="0"
                                 value={formCustoHoraTrabalho}
                                 onChange={(e) => setFormCustoHoraTrabalho(Number(e.target.value))}
                               />
                             </div>
                           </div>
 
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                          <div className="field-row">
                             <div className="field">
                               <label>Custos Fixos / Gás (%)</label>
                               <input

@@ -845,8 +845,8 @@ export function StockPage({ onAction }: { onAction: (msg: string) => void }) {
                         <h3>Identificação & Fornecedor</h3>
                       </div>
                     </div>
-                    <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: "10px" }}>
+                    <div className="field-stack">
+                      <div className="field-row field-row-code">
                         <div className="field">
                           <label>Código Interno</label>
                           <input
@@ -866,7 +866,7 @@ export function StockPage({ onAction }: { onAction: (msg: string) => void }) {
                         </div>
                       </div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px", gap: "10px" }}>
+                      <div className="field-row field-row-cat">
                         <div className="field">
                           <label>Categoria *</label>
                           <select
@@ -907,11 +907,13 @@ export function StockPage({ onAction }: { onAction: (msg: string) => void }) {
                         </div>
                       </div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                      <div className="field-row">
                         <div className="field">
                           <label>
-                            <Truck size={12} style={{ display: "inline", marginRight: 4 }} />
-                            Fornecedor Parceiro
+                            <span>
+                              <Truck size={12} style={{ display: "inline", marginRight: 4 }} />
+                              Fornecedor Parceiro
+                            </span>
                           </label>
                           <select
                             value={formFornecedorId ?? ""}
@@ -954,8 +956,8 @@ export function StockPage({ onAction }: { onAction: (msg: string) => void }) {
                         <h3>Compra, Fracionamento & Saldo</h3>
                       </div>
                     </div>
-                    <div style={{ display: "grid", gap: "12px", marginTop: "12px" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+                    <div className="field-stack">
+                      <div className="field-row field-row-3">
                         <div className="field">
                           <label>Qtd na Embalagem *</label>
                           <input
@@ -1038,9 +1040,9 @@ export function StockPage({ onAction }: { onAction: (msg: string) => void }) {
                         )}
                       </div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                      <div className="field-row">
                         <div className="field">
-                          <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <label>
                             <span>Estoque Atual ({formUnidadeMedida})</span>
                             {editMode && qtdTotalBasePreview > 0 && (
                               <span style={{ display: "flex", gap: "6px" }}>
@@ -1081,7 +1083,7 @@ export function StockPage({ onAction }: { onAction: (msg: string) => void }) {
                           />
                         </div>
                         <div className="field">
-                          <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <label>
                             <span>Estoque Mínimo ({formUnidadeMedida})</span>
                             {editMode && qtdTotalBasePreview > 0 && (
                               <button
